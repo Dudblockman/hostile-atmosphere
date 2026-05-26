@@ -3,6 +3,10 @@ plugins {
     id 'net.neoforged.moddev'
 }
 
+configurations {
+    localRuntime
+}
+
 neoForge {
     version = neoforge_version
     // Automatically enable neoforge AccessTransformers if the file exists
@@ -42,3 +46,32 @@ neoForge {
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+tasks.register('syncLocalRuntimeMods', Sync) {
+    from configurations.localRuntime
+    into layout.projectDirectory.dir('run/mods')
+}
+
+tasks.matching { it.name.startsWith('run') }.configureEach {
+    dependsOn 'syncLocalRuntimeMods'
+}
+tasks.named('neoForgeIdeSync').configure {
+    dependsOn 'syncLocalRuntimeMods'
+}
+
+repositories {
+    maven {
+        name = 'CreateMod'
+        url = 'https://maven.createmod.net'
+    }
+    maven {
+        name = 'CurseMaven'
+        url = 'https://www.cursemaven.com'
+    }
+}
+
+dependencies {
+    localRuntime "mezz.jei:jei-1.21.1-neoforge:${jei_neoforge_version}"
+    localRuntime("com.simibubi.create:create-1.21.1:${create_neoforge_version}") { transitive = false }
+    localRuntime "curse.maven:cold-sweat-506194:${cold_sweat_cf_file_id}"
+}
