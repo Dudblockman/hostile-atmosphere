@@ -68,10 +68,27 @@ repositories {
         name = 'CurseMaven'
         url = 'https://www.cursemaven.com'
     }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'RyanHCode'
+                url = 'https://maven.ryanhcode.dev/releases'
+            }
+        }
+        filter {
+            includeGroupAndSubgroups('dev.ryanhcode')    // Sable, Offroad
+            includeGroupAndSubgroups('dev.eriksonn')     // Aeronautics
+            includeGroup('dev.simulated_team.simulated') // Simulated
+        }
+    }
 }
 
 dependencies {
     localRuntime "mezz.jei:jei-1.21.1-neoforge:${jei_neoforge_version}"
     localRuntime("com.simibubi.create:create-1.21.1:${create_neoforge_version}") { transitive = false }
-    localRuntime "curse.maven:cold-sweat-506194:${cold_sweat_cf_file_id}"
+    localRuntime("dev.simulated_team.simulated:simulated-neoforge-1.21.1:${create_aeronautics_version}") { transitive = false }
+    localRuntime("dev.eriksonn.aeronautics:aeronautics-neoforge-1.21.1:${create_aeronautics_version}") { transitive = false }
+    localRuntime("dev.ryanhcode.offroad:offroad-neoforge-1.21.1:${create_aeronautics_version}") { transitive = false }
+    localRuntime("dev.ryanhcode.sable:sable-neoforge-1.21.1:${sable_version}") { transitive = false }
+    localRuntime "curse.maven:cold-sweat-506194:${cold_sweat_cf_file_id}" 
 }
