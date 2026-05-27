@@ -71,6 +71,13 @@ minecraft {
 
 sourceSets.main.resources.srcDir 'src/generated/resources'
 
+// Expose common sources to the IDE. The multiloader-loader plugin already adds them
+// to compileJava at build time; this declaration is only for IDE classpath resolution.
+if (!gradle.startParameter.taskNames.any { it.contains('compile') || it.contains('build') || it.contains('jar') }) {
+    sourceSets.main.java.srcDirs project(':common').sourceSets.main.java.srcDirs
+    sourceSets.main.resources.srcDirs project(':common').sourceSets.main.resources.srcDirs
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor("org.spongepowered:mixin:0.8.5-SNAPSHOT:processor")

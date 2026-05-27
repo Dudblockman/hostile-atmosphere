@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Client",
+      "request": "launch",
+      "mainClass": "net.minecraftforge.bootstrap.ForgeBootstrap",
+      "projectName": "forge",
+      "cwd": "${workspaceFolder}\\forge\\runs\\client",
+      "vmArgs": "-Dnet.minecraftforge.gradle.GradleStart.srg.srg-mcp\u003dC:\\Users\\logan\\Documents\\GitHub\\hostile-atmosphere\\forge\\build\\createSrgToMcp\\output.srg -Dmixin.env.remapRefMap\u003dtrue -Dmixin.env.refMapRemappingFile\u003dC:\\Users\\logan\\Documents\\GitHub\\hostile-atmosphere\\forge\\build\\createSrgToMcp\\output.srg -Dforge.enableGameTest\u003dtrue -Djava.net.preferIPv6Addresses\u003dsystem -XX:HeapDumpPath\u003dMojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump",
+      "args": "--launchTarget forge_userdev_client --version MOD_DEV --assetIndex 17 --assetsDir C:\\Users\\logan\\.gradle\\caches\\forge_gradle\\assets --gameDir . --mixin.config hostileatmosphere.mixins.json --mixin.config hostileatmosphere.forge.mixins.json",
+      "env": {
+        "MOD_CLASSES": "modClientRun%%${workspaceFolder}\\forge\\build\\sourcesSets\\main",
+        "MCP_MAPPINGS": "official_1.21.1"
+      },
+      "preLaunchTask": "prepareClientCompile"
+    },
+    {
+      "type": "java",
+      "name": "Data",
+      "request": "launch",
+      "mainClass": "net.minecraftforge.bootstrap.ForgeBootstrap",
+      "projectName": "forge",
+      "cwd": "${workspaceFolder}\\forge\\runs\\data",
+      "vmArgs": "-Dnet.minecraftforge.gradle.GradleStart.srg.srg-mcp\u003dC:\\Users\\logan\\Documents\\GitHub\\hostile-atmosphere\\forge\\build\\createSrgToMcp\\output.srg -Dmixin.env.remapRefMap\u003dtrue -Dmixin.env.refMapRemappingFile\u003dC:\\Users\\logan\\Documents\\GitHub\\hostile-atmosphere\\forge\\build\\createSrgToMcp\\output.srg -Djava.net.preferIPv6Addresses\u003dsystem",
+      "args": "--launchTarget forge_userdev_data --assetIndex 17 --assetsDir C:\\Users\\logan\\.gradle\\caches\\forge_gradle\\assets --gameDir . --mod hostileatmosphere --all --output C:\\Users\\logan\\Documents\\GitHub\\hostile-atmosphere\\forge\\src\\generated\\resources --existing C:\\Users\\logan\\Documents\\GitHub\\hostile-atmosphere\\forge\\src\\main\\resources --mixin.config hostileatmosphere.mixins.json --mixin.config hostileatmosphere.forge.mixins.json",
+      "env": {
+        "MOD_CLASSES": "modDataRun%%${workspaceFolder}\\forge\\build\\sourcesSets\\main",
+        "MCP_MAPPINGS": "official_1.21.1"
+      },
+      "preLaunchTask": "prepareDataCompile"
+    },
+    {
+      "type": "java",
+      "name": "Server",
+      "request": "launch",
+      "mainClass": "net.minecraftforge.bootstrap.ForgeBootstrap",
+      "projectName": "forge",
+      "cwd": "${workspaceFolder}\\forge\\runs\\server",
+      "vmArgs": "-Dnet.minecraftforge.gradle.GradleStart.srg.srg-mcp\u003dC:\\Users\\logan\\Documents\\GitHub\\hostile-atmosphere\\forge\\build\\createSrgToMcp\\output.srg -Dmixin.env.remapRefMap\u003dtrue -Dmixin.env.refMapRemappingFile\u003dC:\\Users\\logan\\Documents\\GitHub\\hostile-atmosphere\\forge\\build\\createSrgToMcp\\output.srg -Dforge.enableGameTest\u003dtrue -Djava.net.preferIPv6Addresses\u003dsystem",
+      "args": "--launchTarget forge_userdev_server --gameDir . --mixin.config hostileatmosphere.mixins.json --mixin.config hostileatmosphere.forge.mixins.json",
+      "env": {
+        "MOD_CLASSES": "modServerRun%%${workspaceFolder}\\forge\\build\\sourcesSets\\main",
+        "MCP_MAPPINGS": "official_1.21.1"
+      },
+      "preLaunchTask": "prepareServerCompile"
+    }
+  ]
+}
