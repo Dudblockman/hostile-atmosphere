@@ -14,6 +14,7 @@ import org.dudblockman.hostileatmosphere.data.AtmosphereClientData;
 import org.dudblockman.hostileatmosphere.data.ModAttachments;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.network.SyncAirDebtPayload;
+import org.dudblockman.hostileatmosphere.network.SyncToxinPayload;
 
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
 public class AtmosphereEventHandler {
@@ -24,17 +25,23 @@ public class AtmosphereEventHandler {
         if (player.isCreative() || player.isSpectator()) return;
 
         PlayerAtmosphereData data = player.getData(ModAttachments.ATMOSPHERE_DATA.get());
-        int oldDebt = data.getAirDebt();
+        int oldDebt  = data.getAirDebt();
+        int oldToxin = data.getToxinLevel();
 
         AtmosphereEngine.tick(player, data, AtmosphereConfig.read());
 
-        int newDebt = data.getAirDebt();
+        int newDebt  = data.getAirDebt();
+        int newToxin = data.getToxinLevel();
+
         if (newDebt != oldDebt) {
             PacketDistributor.sendToPlayer(player, new SyncAirDebtPayload(newDebt));
         }
+        if (newToxin != oldToxin) {
+            PacketDistributor.sendToPlayer(player, new SyncToxinPayload(newToxin));
+        }
     }
 
-    /** Suppress vanilla air recovery while the player has outstanding air debt. */
+    /** Clamp vanilla air recovery to the debt ceiling on both server and client. */
     @SubscribeEvent
     public static void onLivingBreathe(LivingBreatheEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
@@ -48,32 +55,46 @@ public class AtmosphereEventHandler {
         }
 
         if (debt > 0) {
-            int ceiling = player.getMaxAirSupply() - debt;
+            int ceiling  = player.getMaxAirSupply() - debt;
             int headroom = Math.max(0, ceiling - player.getAirSupply());
             event.setRefillAirAmount(Math.min(event.getRefillAirAmount(), headroom));
         }
     }
 
-    /** Sync current debt to client on login/respawn so client-side suppression works immediately. */
+    /** Sync full atmosphere state to client on login. */
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        syncDebt(event.getEntity());
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        syncAll(player);
     }
 
     @SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         PlayerAtmosphereData data = player.getData(ModAttachments.ATMOSPHERE_DATA.get());
+
+        // Reset air state
         data.setAirDebt(0);
         data.setDrainAccumulator(0f);
         data.setRecoveryAccumulator(0f);
         data.setSuffocationTicks(0);
-        syncDebt(player);
+
+        // Retain a fraction of toxin; clear accumulators
+        float retainFactor = AtmosphereConfig.TOXIN_RETAIN_ON_DEATH.get().floatValue();
+        int retainedToxin = Math.round(data.getToxinLevel() * retainFactor);
+        data.setToxinLevel(retainedToxin);
+        data.setToxinAccumulator(0f);
+        data.setToxinRecoveryAccumulator(0f);
+
+        // Sync fresh state to client (engine will re-apply effect on next tick if toxin > threshold)
+        syncAll(player);
     }
 
-    private static void syncDebt(net.minecraft.world.entity.Entity entity) {
-        if (!(entity instanceof ServerPlayer player)) return;
-        int debt = player.getData(ModAttachments.ATMOSPHERE_DATA.get()).getAirDebt();
-        PacketDistributor.sendToPlayer(player, new SyncAirDebtPayload(debt));
+    // ------------------------------------------------------------------------------------------
+
+    private static void syncAll(ServerPlayer player) {
+        PlayerAtmosphereData data = player.getData(ModAttachments.ATMOSPHERE_DATA.get());
+        PacketDistributor.sendToPlayer(player, new SyncAirDebtPayload(data.getAirDebt()));
+        PacketDistributor.sendToPlayer(player, new SyncToxinPayload(data.getToxinLevel()));
     }
 }

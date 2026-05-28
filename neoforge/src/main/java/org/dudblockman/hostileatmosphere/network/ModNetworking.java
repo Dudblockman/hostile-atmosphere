@@ -14,10 +14,17 @@ public class ModNetworking {
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar("1");
+
         registrar.playToClient(
                 SyncAirDebtPayload.TYPE,
                 SyncAirDebtPayload.CODEC,
                 (payload, ctx) -> AtmosphereClientData.setAirDebt(ctx.player().getUUID(), payload.airDebt())
+        );
+
+        registrar.playToClient(
+                SyncToxinPayload.TYPE,
+                SyncToxinPayload.CODEC,
+                (payload, ctx) -> AtmosphereClientData.setToxin(ctx.player().getUUID(), payload.toxinLevel())
         );
     }
 }

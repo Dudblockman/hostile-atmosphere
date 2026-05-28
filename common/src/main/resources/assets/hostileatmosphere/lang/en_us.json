@@ -1,4 +1,6 @@
 {
   "death.attack.hostileatmosphere.miasma": "%1$s breathed too much miasma",
-  "death.attack.hostileatmosphere.miasma_intense": "%1$s was consumed by the miasma"
+  "death.attack.hostileatmosphere.miasma_intense": "%1$s was consumed by the miasma",
+
+  "effect.hostileatmosphere.atmospheric_toxicity": "Atmospheric Toxicity"
 }

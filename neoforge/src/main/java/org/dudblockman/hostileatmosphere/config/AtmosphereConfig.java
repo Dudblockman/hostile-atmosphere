@@ -1,17 +1,19 @@
 package org.dudblockman.hostileatmosphere.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
-import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
+import org.dudblockman.hostileatmosphere.registry.ModEffects;
 
 public class AtmosphereConfig {
 
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
+    // --- Atmosphere ---
     public static final ModConfigSpec.IntValue DANGER_Y_THRESHOLD;
     public static final ModConfigSpec.IntValue HAZARD_TIME_SECS;
     public static final ModConfigSpec.IntValue SAFE_ZONE_RECOVERY_SECS;
     public static final ModConfigSpec.IntValue GRACE_PERIOD_DAYS;
 
+    // --- Miasma damage ramp ---
     public static final ModConfigSpec.IntValue RAMP_TIER2_SECS;
     public static final ModConfigSpec.IntValue RAMP_TIER3_SECS;
     public static final ModConfigSpec.DoubleValue RAMP_DAMAGE_TIER1;
@@ -20,6 +22,15 @@ public class AtmosphereConfig {
     public static final ModConfigSpec.DoubleValue RAMP_INTERVAL_TIER1_SECS;
     public static final ModConfigSpec.DoubleValue RAMP_INTERVAL_TIER2_SECS;
     public static final ModConfigSpec.DoubleValue RAMP_INTERVAL_TIER3_SECS;
+
+    // --- Toxin buildup ---
+    public static final ModConfigSpec.IntValue TOXIN_BUILDUP_SECS;
+    public static final ModConfigSpec.IntValue TOXIN_RECOVERY_SECS;
+    public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_1;
+    public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_2;
+    public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_3;
+    public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_4;
+    public static final ModConfigSpec.DoubleValue TOXIN_RETAIN_ON_DEATH;
 
     public static final ModConfigSpec SPEC;
 
@@ -36,7 +47,7 @@ public class AtmosphereConfig {
 
         SAFE_ZONE_RECOVERY_SECS = BUILDER
                 .comment("Seconds in the safe zone to fully recover from maximum air debt. Default: 300 (5 min).")
-                .defineInRange("safeZoneRecoverySecs", 300, 1, 72000);
+                .defineInRange("safeZoneRecoverySecs", 30, 1, 72000);
 
         GRACE_PERIOD_DAYS = BUILDER
                 .comment("In-game days of immunity for new players (0 = disabled).")
@@ -76,6 +87,36 @@ public class AtmosphereConfig {
                 .comment("Seconds between Miasma hits at tier 3. Default: 0.5.")
                 .defineInRange("rampIntervalTier3Secs", 0.5, 0.05, 10.0);
 
+        BUILDER.pop().push("toxin");
+
+        TOXIN_BUILDUP_SECS = BUILDER
+                .comment("Seconds of continuous hazard-zone exposure to go from 0 to maximum toxin (1000). Default: 2400 (40 min).")
+                .defineInRange("toxinBuildupSecs", 2400, 1, 864000);
+
+        TOXIN_RECOVERY_SECS = BUILDER
+                .comment("Seconds in the safe zone to clear from maximum toxin (1000) to zero. Default: 14400 (240 min).")
+                .defineInRange("toxinRecoverySecs", 14400, 1, 864000);
+
+        TOXIN_THRESHOLD_1 = BUILDER
+                .comment("Toxin level at which Atmospheric Toxicity I activates (Weakness). Default: 250.")
+                .defineInRange("toxinThreshold1", 250, 0, 1000);
+
+        TOXIN_THRESHOLD_2 = BUILDER
+                .comment("Toxin level at which Atmospheric Toxicity II activates (Weakness + Mining Fatigue). Default: 500.")
+                .defineInRange("toxinThreshold2", 500, 0, 1000);
+
+        TOXIN_THRESHOLD_3 = BUILDER
+                .comment("Toxin level at which Atmospheric Toxicity III activates (above + Poison-style damage). Default: 750.")
+                .defineInRange("toxinThreshold3", 750, 0, 1000);
+
+        TOXIN_THRESHOLD_4 = BUILDER
+                .comment("Toxin level at which Atmospheric Toxicity IV activates (above + Wither-style damage). Default: 950.")
+                .defineInRange("toxinThreshold4", 950, 0, 1000);
+
+        TOXIN_RETAIN_ON_DEATH = BUILDER
+                .comment("Fraction of toxin level carried through death (0.0 = full reset on death, 1.0 = full carry-over). Default: 0.5.")
+                .defineInRange("toxinRetainOnDeath", 0.5, 0.0, 1.0);
+
         BUILDER.pop();
 
         SPEC = BUILDER.build();
@@ -95,7 +136,15 @@ public class AtmosphereConfig {
                 RAMP_DAMAGE_TIER3.get().floatValue(),
                 RAMP_INTERVAL_TIER1_SECS.get().floatValue(),
                 RAMP_INTERVAL_TIER2_SECS.get().floatValue(),
-                RAMP_INTERVAL_TIER3_SECS.get().floatValue()
+                RAMP_INTERVAL_TIER3_SECS.get().floatValue(),
+                TOXIN_BUILDUP_SECS.get(),
+                TOXIN_RECOVERY_SECS.get(),
+                TOXIN_THRESHOLD_1.get(),
+                TOXIN_THRESHOLD_2.get(),
+                TOXIN_THRESHOLD_3.get(),
+                TOXIN_THRESHOLD_4.get(),
+                TOXIN_RETAIN_ON_DEATH.get().floatValue(),
+                ModEffects.ATMOSPHERIC_TOXICITY
         );
     }
 }

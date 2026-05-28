@@ -1,15 +1,15 @@
 package org.dudblockman.hostileatmosphere.config;
 
-/**
- * Immutable snapshot of config values passed into AtmosphereEngine each tick.
- * All time values are in seconds; the engine converts to tick rates at runtime using
- * player.getMaxAirSupply() so the maths stays accurate if maxAirSupply is ever modified.
- */
+import net.minecraft.core.Holder;
+import net.minecraft.world.effect.MobEffect;
+
 public record AtmosphereSettings(
+        // --- Air depletion ---
         int dangerYThreshold,
         int hazardTimeSecs,
         int safeZoneRecoverySecs,
         int gracePeriodDays,
+        // --- Miasma damage ramp ---
         int rampTier2Secs,
         int rampTier3Secs,
         float rampDamageTier1,
@@ -17,5 +17,14 @@ public record AtmosphereSettings(
         float rampDamageTier3,
         float rampIntervalTier1Secs,
         float rampIntervalTier2Secs,
-        float rampIntervalTier3Secs
+        float rampIntervalTier3Secs,
+        // --- Toxin buildup ---
+        int toxinBuildupSecs,
+        int toxinRecoverySecs,
+        int toxinThreshold1,
+        int toxinThreshold2,
+        int toxinThreshold3,
+        int toxinThreshold4,
+        float toxinRetainOnDeath,
+        Holder<MobEffect> toxicityEffect
 ) {}

@@ -1,9 +1,12 @@
 package org.dudblockman.hostileatmosphere.engine;
 
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.damage.MiasmaDamageTypes;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
@@ -22,6 +25,8 @@ public class AtmosphereEngine {
 
         int maxAir = player.getMaxAirSupply();
         boolean inHazard = Mth.floor(player.getY()) <= cfg.dangerYThreshold();
+
+        // ----- Air debt -----------------------------------------------------------------------
 
         if (inHazard) {
             accumulateDrain(data, maxAir, cfg);
@@ -45,11 +50,28 @@ public class AtmosphereEngine {
         } else if (data.getSuffocationTicks() > 0) {
             data.setSuffocationTicks(0);
         }
+
+        // ----- Toxin buildup ------------------------------------------------------------------
+
+        if (inHazard) {
+            accumulateToxin(data, cfg);
+            data.setToxinRecoveryAccumulator(0f);
+        } else {
+            recoverToxin(data, cfg);
+            data.setToxinAccumulator(0f);
+        }
+
+        int targetAmp = getToxinAmplifier(data.getToxinLevel(), cfg);
+        applyToxicityEffect(player, targetAmp, cfg.toxicityEffect());
     }
+
+    // ==========================================================================================
+    // Air debt helpers
+    // ==========================================================================================
 
     /**
      * Fractional accumulator drain.
-     * drainPerTick = maxAir / (hazardTimeSecs * 20), which may be non-integer.
+     * drainPerTick = maxAir / (hazardTimeSecs × 20), which may be non-integer.
      * Units are applied as whole numbers whenever the accumulator reaches 1.
      */
     private static void accumulateDrain(PlayerAtmosphereData data, int maxAir, AtmosphereSettings cfg) {
@@ -101,6 +123,63 @@ public class AtmosphereEngine {
                             .getHolderOrThrow(key)
             );
             player.hurt(miasma, damage);
+        }
+    }
+
+    // ==========================================================================================
+    // Toxin helpers
+    // ==========================================================================================
+
+    /**
+     * Fractional toxin buildup accumulator — same pattern as air drain.
+     * buildupPerTick = 1000 / (toxinBuildupSecs × 20)
+     */
+    private static void accumulateToxin(PlayerAtmosphereData data, AtmosphereSettings cfg) {
+        float buildupPerTick = 1000f / (cfg.toxinBuildupSecs() * 20f);
+        float acc = data.getToxinAccumulator() + buildupPerTick;
+        int units = (int) acc;
+        if (units > 0) {
+            data.setToxinLevel(Math.min(data.getToxinLevel() + units, 1000));
+            acc -= units;
+        }
+        data.setToxinAccumulator(acc);
+    }
+
+    /**
+     * Fractional toxin recovery accumulator.
+     * recoveryPerTick = 1000 / (toxinRecoverySecs × 20)
+     */
+    private static void recoverToxin(PlayerAtmosphereData data, AtmosphereSettings cfg) {
+        if (data.getToxinLevel() == 0) return;
+        float recoveryPerTick = 1000f / (cfg.toxinRecoverySecs() * 20f);
+        float acc = data.getToxinRecoveryAccumulator() + recoveryPerTick;
+        int units = (int) acc;
+        if (units > 0) {
+            data.setToxinLevel(Math.max(data.getToxinLevel() - units, 0));
+            acc -= units;
+        }
+        data.setToxinRecoveryAccumulator(acc);
+    }
+
+    public static int getToxinAmplifier(int toxinLevel, AtmosphereSettings cfg) {
+        if (toxinLevel >= cfg.toxinThreshold4()) return 3;
+        if (toxinLevel >= cfg.toxinThreshold3()) return 2;
+        if (toxinLevel >= cfg.toxinThreshold2()) return 1;
+        if (toxinLevel >= cfg.toxinThreshold1()) return 0;
+        return -1;
+    }
+
+    private static void applyToxicityEffect(ServerPlayer player, int targetAmplifier,
+                                             Holder<MobEffect> effectHolder) {
+        var existing = player.getEffect(effectHolder);
+        int currentAmplifier = (existing != null) ? existing.getAmplifier() : -1;
+
+        if (targetAmplifier == currentAmplifier) return; 
+        if (existing != null && existing.getDuration() != -1) return; 
+
+        if (existing != null) player.removeEffect(effectHolder);
+        if (targetAmplifier >= 0) {
+            player.addEffect(new MobEffectInstance(effectHolder, -1, targetAmplifier, true, true, true));
         }
     }
 }
