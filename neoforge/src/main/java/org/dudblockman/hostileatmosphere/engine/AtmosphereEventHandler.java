@@ -1,6 +1,7 @@
 package org.dudblockman.hostileatmosphere.engine;
 
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -9,11 +10,14 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.dudblockman.hostileatmosphere.Constants;
+import org.dudblockman.hostileatmosphere.compat.CreateCompat;
+import org.dudblockman.hostileatmosphere.compat.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
 import org.dudblockman.hostileatmosphere.data.AtmosphereClientData;
 import org.dudblockman.hostileatmosphere.data.ModAttachments;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.network.SyncAirDebtPayload;
+import org.dudblockman.hostileatmosphere.network.SyncDivingActivePayload;
 import org.dudblockman.hostileatmosphere.network.SyncToxinPayload;
 
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
@@ -21,14 +25,42 @@ public class AtmosphereEventHandler {
 
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        var entity = event.getEntity();
+        if (entity.level().isClientSide()) {
+            if (!entity.isCreative() && !entity.isSpectator()) {
+                if (AtmosphereClientData.isDivingActive(entity.getUUID())) {
+                    CreateCompat.updateVisualAir(entity);
+                } else {
+                    CreateCompat.clearVisualAir(entity);
+                }
+            }
+            return;
+        }
+        if (!(entity instanceof ServerPlayer player)) return;
         if (player.isCreative() || player.isSpectator()) return;
 
         PlayerAtmosphereData data = player.getData(ModAttachments.ATMOSPHERE_DATA.get());
         int oldDebt  = data.getAirDebt();
         int oldToxin = data.getToxinLevel();
 
-        AtmosphereEngine.tick(player, data, AtmosphereConfig.read());
+        var cfg = AtmosphereConfig.read();
+        var protection = CreateCompat.getProtection(player);
+        AtmosphereEngine.tick(player, data, cfg, protection);
+
+        boolean divingActive = (protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR)
+                && Mth.floor(player.getEyeY()) <= cfg.dangerYThreshold();
+
+        if (divingActive != data.isDivingActive()) {
+            data.setDivingActive(divingActive);
+            PacketDistributor.sendToPlayer(player, new SyncDivingActivePayload(divingActive));
+        }
+
+        // Only drain backtank for atmospheric filtering when eye is in air.
+        // When submerged in a drowning fluid, Create already consumes the backtank
+        // for breathing — draining here too would cause double consumption.
+        if (divingActive && player.getEyeInFluidType().isAir() && player.tickCount % 20 == 0) {
+            CreateCompat.drainBacktank(player);
+        }
 
         int newDebt  = data.getAirDebt();
         int newToxin = data.getToxinLevel();

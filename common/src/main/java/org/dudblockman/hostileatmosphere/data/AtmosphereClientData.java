@@ -6,8 +6,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class AtmosphereClientData {
 
-    private static final Map<UUID, Integer> AIR_DEBT = new ConcurrentHashMap<>();
-    private static final Map<UUID, Integer> TOXIN    = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> AIR_DEBT     = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> TOXIN        = new ConcurrentHashMap<>();
+    private static final Map<UUID, Boolean> DIVING_ACTIVE = new ConcurrentHashMap<>();
 
     private AtmosphereClientData() {}
 
@@ -31,5 +32,16 @@ public final class AtmosphereClientData {
 
     public static int getToxin(UUID id) {
         return TOXIN.getOrDefault(id, 0);
+    }
+
+    // ---- Diving active state -----------------------------------------------------------------
+
+    public static void setDivingActive(UUID id, boolean active) {
+        if (!active) DIVING_ACTIVE.remove(id);
+        else DIVING_ACTIVE.put(id, true);
+    }
+
+    public static boolean isDivingActive(UUID id) {
+        return DIVING_ACTIVE.getOrDefault(id, false);
     }
 }

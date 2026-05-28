@@ -8,6 +8,7 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
+import org.dudblockman.hostileatmosphere.compat.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.engine.AtmosphereEngine;
@@ -24,14 +25,15 @@ public final class DebugCommands {
             CommandDispatcher<CommandSourceStack> dispatcher,
             Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
             Supplier<AtmosphereSettings> configGetter,
-            Consumer<ServerPlayer> removeEffect) {
+            Consumer<ServerPlayer> removeEffect,
+            Function<ServerPlayer, ProtectionLevel> protectionGetter) {
 
         dispatcher.register(Commands.literal("atmosphere")
                 .requires(src -> src.hasPermission(2))
                 .then(Commands.literal("status")
-                        .executes(ctx -> status(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, configGetter))
+                        .executes(ctx -> status(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, configGetter, protectionGetter))
                         .then(Commands.argument("player", EntityArgument.player())
-                                .executes(ctx -> status(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), dataGetter, configGetter))))
+                                .executes(ctx -> status(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), dataGetter, configGetter, protectionGetter))))
                 .then(Commands.literal("reset")
                         .executes(ctx -> reset(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, removeEffect))
                         .then(Commands.argument("player", EntityArgument.player())
@@ -66,30 +68,40 @@ public final class DebugCommands {
 
     private static int status(CommandSourceStack src, ServerPlayer player,
                                Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
-                               Supplier<AtmosphereSettings> configGetter) {
+                               Supplier<AtmosphereSettings> configGetter,
+                               Function<ServerPlayer, ProtectionLevel> protectionGetter) {
         PlayerAtmosphereData data = dataGetter.apply(player);
         AtmosphereSettings cfg = configGetter.get();
         int maxAir  = player.getMaxAirSupply();
-        boolean inHazard = Mth.floor(player.getY()) <= cfg.dangerYThreshold();
+        boolean inHazard = Mth.floor(player.getEyeY()) <= cfg.dangerYThreshold();
+        ProtectionLevel protection = protectionGetter.apply(player);
 
         int toxin = data.getToxinLevel();
         int amp   = AtmosphereEngine.getToxinAmplifier(toxin, cfg);
         String ampStr = (amp < 0) ? "none" : "L" + (amp + 1) + " (amp " + amp + ")";
 
+        AtmosphereEngine.Rates rates = AtmosphereEngine.computeRates(player, data, cfg, protection);
+        String airRateStr = formatRate(rates.airDebtPerSec(), data.getAirDebt(), maxAir - data.getAirDebt());
+        String toxRateStr = formatRate(rates.toxinPerSec(),   toxin, 1000 - toxin);
+
         src.sendSuccess(() -> Component.literal(String.format(
-                "[HA] %s | Y=%d | %s\n" +
+                "[HA] %s | eyeY=%d | %s | protection=%s\n" +
                 "  airDebt=%d/%d  ceiling=%d  air=%d  suffTicks=%d  graceTicks=%d\n" +
-                "  toxin=%d/1000  effect=%s",
+                "  toxin=%d/1000  effect=%s\n" +
+                "  airDebt: %s | toxin: %s",
                 player.getName().getString(),
-                Mth.floor(player.getY()),
+                Mth.floor(player.getEyeY()),
                 inHazard ? "§cHAZARD§r" : "§aSAFE§r",
+                protection.name(),
                 data.getAirDebt(), maxAir,
                 maxAir - data.getAirDebt(),
                 player.getAirSupply(),
                 data.getSuffocationTicks(),
                 data.getGracePeriodTicks(),
                 toxin,
-                ampStr
+                ampStr,
+                airRateStr,
+                toxRateStr
         )), false);
         return 1;
     }
@@ -142,6 +154,21 @@ public final class DebugCommands {
         src.sendSuccess(() -> Component.literal(
                 "[HA] grace=" + days + "d (" + ticks + "t) for " + player.getName().getString()), false);
         return 1;
+    }
+
+    /** Formats a signed per-second rate with an ETA to the relevant limit. */
+    private static String formatRate(float perSec, int current, int remaining) {
+        if (perSec == 0f) return "stable";
+        boolean gaining = perSec > 0;
+        int etaSecs = (int) (gaining ? remaining / perSec : current / -perSec);
+        return String.format("%s%.2f/s (%s)", gaining ? "+" : "", perSec, formatTime(etaSecs));
+    }
+
+    private static String formatTime(int secs) {
+        if (secs <= 0) return "now";
+        if (secs >= 3600) return String.format("%dh%02dm", secs / 3600, (secs % 3600) / 60);
+        if (secs >= 60)   return String.format("%dm%02ds", secs / 60, secs % 60);
+        return secs + "s";
     }
 
     private static int showConfig(CommandSourceStack src, Supplier<AtmosphereSettings> configGetter) {

@@ -4,6 +4,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.dudblockman.hostileatmosphere.Constants;
+import org.dudblockman.hostileatmosphere.compat.CreateCompat;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
 import org.dudblockman.hostileatmosphere.data.ModAttachments;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
@@ -23,7 +24,8 @@ public final class DebugCommandsHandler {
                 event.getDispatcher(),
                 player -> player.getData(ModAttachments.ATMOSPHERE_DATA.get()),
                 AtmosphereConfig::read,
-                player -> player.removeEffect(ModEffects.ATMOSPHERIC_TOXICITY)
+                player -> player.removeEffect(ModEffects.ATMOSPHERIC_TOXICITY),
+                CreateCompat::getProtection
         );
     }
 }

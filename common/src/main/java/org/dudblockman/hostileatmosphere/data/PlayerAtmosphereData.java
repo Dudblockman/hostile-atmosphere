@@ -34,6 +34,7 @@ public class PlayerAtmosphereData {
 
     private int airDebt;
     private float drainAccumulator;
+    private boolean divingActive;
     private float recoveryAccumulator;
     private int suffocationTicks;
     private int gracePeriodTicks;
@@ -81,6 +82,9 @@ public class PlayerAtmosphereData {
 
     public float getToxinRecoveryAccumulator() { return toxinRecoveryAccumulator; }
     public void setToxinRecoveryAccumulator(float v) { toxinRecoveryAccumulator = v; }
+
+    public boolean isDivingActive() { return divingActive; }
+    public void setDivingActive(boolean v) { divingActive = v; }
 
     /** True on the very first tick — grace period has never been initialised. */
     public boolean needsInit() { return gracePeriodTicks == -1; }

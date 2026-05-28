@@ -2,18 +2,36 @@ package org.dudblockman.hostileatmosphere.engine;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
+import org.dudblockman.hostileatmosphere.compat.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.damage.MiasmaDamageTypes;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 
 public class AtmosphereEngine {
 
-    public static void tick(ServerPlayer player, PlayerAtmosphereData data, AtmosphereSettings cfg) {
+    private static final String NS = "hostileatmosphere";
+    private static final ResourceLocation ID_AIR_PROTECTION  = ResourceLocation.fromNamespaceAndPath(NS, "protection_air");
+    private static final ResourceLocation ID_AIR_UNDERWATER  = ResourceLocation.fromNamespaceAndPath(NS, "underwater_air");
+    private static final ResourceLocation ID_AIR_RESPIRATION = ResourceLocation.fromNamespaceAndPath(NS, "respiration_air");
+    private static final ResourceLocation ID_TOXIN_PROTECTION = ResourceLocation.fromNamespaceAndPath(NS, "protection_toxin");
+    private static final ResourceLocation ID_TOXIN_EXPEDITION = ResourceLocation.fromNamespaceAndPath(NS, "expedition_toxin");
+    private static final ResourceLocation ID_TOXIN_UNDERWATER = ResourceLocation.fromNamespaceAndPath(NS, "underwater_toxin");
+
+    public static void tick(ServerPlayer player, PlayerAtmosphereData data, AtmosphereSettings cfg,
+                            ProtectionLevel protection) {
         if (data.needsInit()) {
             data.setGracePeriodTicks(cfg.gracePeriodDays() * 24000);
         }
@@ -24,14 +42,27 @@ public class AtmosphereEngine {
         }
 
         int maxAir = player.getMaxAirSupply();
-        boolean inHazard = Mth.floor(player.getY()) <= cfg.dangerYThreshold();
+        boolean inHazard = Mth.floor(player.getEyeY()) <= cfg.dangerYThreshold();
+
+        applyRateModifiers(player, protection, cfg);
+
+        float airMult   = getAttributeValue(player, cfg.airDrainRate());
+        float toxinMult = getAttributeValue(player, cfg.toxinRate());
+
+        boolean fullyProtected = protection == ProtectionLevel.SEALED
+                || protection == ProtectionLevel.RESPIRATOR;
 
         // ----- Air debt -----------------------------------------------------------------------
 
-        if (inHazard) {
-            accumulateDrain(data, maxAir, cfg);
+        boolean doAirDrain    = inHazard && airMult > 0;
+        // SEALED = full suit supplies clean air → recovers even in hazard.
+        // RESPIRATOR = pauses drain only; debt stays frozen until player leaves.
+        boolean doAirRecovery = !inHazard || protection == ProtectionLevel.SEALED;
+
+        if (doAirDrain) {
+            accumulateDrain(data, maxAir, cfg, airMult);
             data.setRecoveryAccumulator(0f);
-        } else if (data.getAirDebt() > 0) {
+        } else if (doAirRecovery && data.getAirDebt() > 0) {
             accumulateRecovery(data, maxAir, cfg);
             data.setDrainAccumulator(0f);
         } else {
@@ -44,7 +75,8 @@ public class AtmosphereEngine {
             player.setAirSupply(ceiling);
         }
 
-        if (data.getAirDebt() >= maxAir) {
+        // Miasma damage only fires when the player has zero air AND no protection.
+        if (data.getAirDebt() >= maxAir && !fullyProtected) {
             data.setSuffocationTicks(data.getSuffocationTicks() + 1);
             applyMiasmaDamage(player, data, cfg);
         } else if (data.getSuffocationTicks() > 0) {
@@ -53,12 +85,16 @@ public class AtmosphereEngine {
 
         // ----- Toxin buildup ------------------------------------------------------------------
 
-        if (inHazard) {
-            accumulateToxin(data, cfg);
+        if (inHazard && toxinMult > 0) {
+            accumulateToxin(data, cfg, toxinMult);
             data.setToxinRecoveryAccumulator(0f);
-        } else {
+        } else if (!inHazard) {
             recoverToxin(data, cfg);
             data.setToxinAccumulator(0f);
+        } else {
+            // In hazard, toxinMult == 0 (IMMUNE) — suspended, neither builds nor drains.
+            data.setToxinAccumulator(0f);
+            data.setToxinRecoveryAccumulator(0f);
         }
 
         int targetAmp = getToxinAmplifier(data.getToxinLevel(), cfg);
@@ -66,16 +102,118 @@ public class AtmosphereEngine {
     }
 
     // ==========================================================================================
-    // Air debt helpers
+    // Attribute modifier application
     // ==========================================================================================
 
     /**
-     * Fractional accumulator drain.
-     * drainPerTick = maxAir / (hazardTimeSecs × 20), which may be non-integer.
-     * Units are applied as whole numbers whenever the accumulator reaches 1.
+     * Clears and re-applies all HA-owned transient modifiers on the player's
+     * air_drain_rate and toxin_rate attributes each tick so external mods can
+     * always read the current effective rate.
+     *
+     * ADD_MULTIPLIED_TOTAL stacks multiplicatively: final = base × Π(1 + value).
+     * Modifier value for desired multiplier M = M - 1.0.
      */
-    private static void accumulateDrain(PlayerAtmosphereData data, int maxAir, AtmosphereSettings cfg) {
-        float drainPerTick = (float) maxAir / (cfg.hazardTimeSecs() * 20f);
+    private static void applyRateModifiers(ServerPlayer player, ProtectionLevel protection,
+                                            AtmosphereSettings cfg) {
+        var airInst   = player.getAttribute(cfg.airDrainRate());
+        var toxinInst = player.getAttribute(cfg.toxinRate());
+        if (airInst == null || toxinInst == null) return;
+
+        // Clear previous per-tick modifiers
+        airInst.removeModifier(ID_AIR_PROTECTION);
+        airInst.removeModifier(ID_AIR_UNDERWATER);
+        airInst.removeModifier(ID_AIR_RESPIRATION);
+        toxinInst.removeModifier(ID_TOXIN_PROTECTION);
+        toxinInst.removeModifier(ID_TOXIN_EXPEDITION);
+        toxinInst.removeModifier(ID_TOXIN_UNDERWATER);
+
+        boolean inWater = player.isEyeInFluid(FluidTags.WATER);
+
+        // Air: SEALED or RESPIRATOR — suit supplies clean air, drain stops entirely
+        if (protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR) {
+            airInst.addTransientModifier(mult(ID_AIR_PROTECTION, -1.0));
+        }
+
+        // Air: underwater reduction
+        if (inWater) {
+            double m = underwaterAirMult(player, protection, cfg);
+            airInst.addTransientModifier(mult(ID_AIR_UNDERWATER, m - 1.0));
+        }
+
+        // Air: Respiration enchantment — effective multiplier 1 / (1 + 0.5*N)
+        int resp = getRespirationLevel(player);
+        if (resp > 0) {
+            airInst.addTransientModifier(mult(ID_AIR_RESPIRATION, 1.0 / (1.0 + 0.5 * resp) - 1.0));
+        }
+
+        // Toxin: SEALED — full immunity
+        if (protection == ProtectionLevel.SEALED) {
+            toxinInst.addTransientModifier(mult(ID_TOXIN_PROTECTION, -1.0));
+        }
+
+        // Toxin: RESPIRATOR — expedition seep reduction (stacks with underwater below)
+        if (protection == ProtectionLevel.RESPIRATOR) {
+            toxinInst.addTransientModifier(mult(ID_TOXIN_EXPEDITION, cfg.expeditionToxinMultiplier() - 1.0));
+        }
+
+        // Toxin: underwater reduction
+        if (inWater) {
+            double m = underwaterToxinMult(player, protection, cfg);
+            toxinInst.addTransientModifier(mult(ID_TOXIN_UNDERWATER, m - 1.0));
+        }
+    }
+
+    private static AttributeModifier mult(ResourceLocation id, double amount) {
+        return new AttributeModifier(id, amount, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
+    }
+
+    private static float getAttributeValue(ServerPlayer player, Holder<Attribute> attr) {
+        var inst = player.getAttribute(attr);
+        return inst == null ? 1.0f : (float) Math.max(0.0, inst.getValue());
+    }
+
+    // ==========================================================================================
+    // Protection helpers (return the raw multiplier for underwater conditions)
+    // ==========================================================================================
+
+    private static double underwaterAirMult(ServerPlayer player, ProtectionLevel protection,
+                                             AtmosphereSettings cfg) {
+        if (player.hasEffect(MobEffects.CONDUIT_POWER)) {
+            return cfg.conduitPurification()
+                    ? cfg.conduitPurificationAirDebtMultiplier()
+                    : cfg.underwaterAirDebtMultiplier();
+        }
+        if (player.hasEffect(MobEffects.WATER_BREATHING)
+                || player.getItemBySlot(EquipmentSlot.HEAD).is(Items.TURTLE_HELMET)
+                || protection == ProtectionLevel.BACKTANK_ONLY) {
+            return cfg.underwaterAirDebtMultiplier();
+        }
+        return 1.0;
+    }
+
+    private static double underwaterToxinMult(ServerPlayer player, ProtectionLevel protection,
+                                               AtmosphereSettings cfg) {
+        if (player.hasEffect(MobEffects.CONDUIT_POWER)) {
+            return cfg.conduitPurification()
+                    ? cfg.conduitPurificationToxinMultiplier()
+                    : cfg.underwaterToxinMultiplier();
+        }
+        if (player.hasEffect(MobEffects.WATER_BREATHING)
+                || protection == ProtectionLevel.BACKTANK_ONLY
+                || protection == ProtectionLevel.RESPIRATOR) {
+            return cfg.underwaterToxinMultiplier();
+        }
+        // Turtle Helmet: no toxin benefit — full rate.
+        return 1.0;
+    }
+
+    // ==========================================================================================
+    // Air debt helpers
+    // ==========================================================================================
+
+    private static void accumulateDrain(PlayerAtmosphereData data, int maxAir,
+                                         AtmosphereSettings cfg, float rateMult) {
+        float drainPerTick = ((float) maxAir / (cfg.hazardTimeSecs() * 20f)) * rateMult;
         float acc = data.getDrainAccumulator() + drainPerTick;
         int units = (int) acc;
         if (units > 0) {
@@ -127,15 +265,25 @@ public class AtmosphereEngine {
     }
 
     // ==========================================================================================
+    // Enchantment helpers
+    // ==========================================================================================
+
+    private static int getRespirationLevel(ServerPlayer player) {
+        var helmet = player.getItemBySlot(EquipmentSlot.HEAD);
+        if (helmet.isEmpty()) return 0;
+        return player.level().registryAccess()
+                .lookup(Registries.ENCHANTMENT)
+                .flatMap(reg -> reg.get(Enchantments.RESPIRATION))
+                .map(h -> helmet.getEnchantments().getLevel(h))
+                .orElse(0);
+    }
+
+    // ==========================================================================================
     // Toxin helpers
     // ==========================================================================================
 
-    /**
-     * Fractional toxin buildup accumulator — same pattern as air drain.
-     * buildupPerTick = 1000 / (toxinBuildupSecs × 20)
-     */
-    private static void accumulateToxin(PlayerAtmosphereData data, AtmosphereSettings cfg) {
-        float buildupPerTick = 1000f / (cfg.toxinBuildupSecs() * 20f);
+    private static void accumulateToxin(PlayerAtmosphereData data, AtmosphereSettings cfg, float rateMult) {
+        float buildupPerTick = (1000f / (cfg.toxinBuildupSecs() * 20f)) * rateMult;
         float acc = data.getToxinAccumulator() + buildupPerTick;
         int units = (int) acc;
         if (units > 0) {
@@ -145,10 +293,6 @@ public class AtmosphereEngine {
         data.setToxinAccumulator(acc);
     }
 
-    /**
-     * Fractional toxin recovery accumulator.
-     * recoveryPerTick = 1000 / (toxinRecoverySecs × 20)
-     */
     private static void recoverToxin(PlayerAtmosphereData data, AtmosphereSettings cfg) {
         if (data.getToxinLevel() == 0) return;
         float recoveryPerTick = 1000f / (cfg.toxinRecoverySecs() * 20f);
@@ -159,6 +303,40 @@ public class AtmosphereEngine {
             acc -= units;
         }
         data.setToxinRecoveryAccumulator(acc);
+    }
+
+    /** Current per-second rates of change for air debt and toxin level. */
+    public record Rates(float airDebtPerSec, float toxinPerSec) {}
+
+    public static Rates computeRates(ServerPlayer player, PlayerAtmosphereData data,
+                                     AtmosphereSettings cfg, ProtectionLevel protection) {
+        int maxAir = player.getMaxAirSupply();
+        boolean inHazard = Mth.floor(player.getEyeY()) <= cfg.dangerYThreshold();
+        boolean fullyProtected = protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR;
+
+        applyRateModifiers(player, protection, cfg);
+        float airMult   = getAttributeValue(player, cfg.airDrainRate());
+        float toxinMult = getAttributeValue(player, cfg.toxinRate());
+
+        float airDebtPerSec;
+        if (inHazard && airMult > 0) {
+            airDebtPerSec = (maxAir / (float) cfg.hazardTimeSecs()) * airMult;
+        } else if ((!inHazard || protection == ProtectionLevel.SEALED) && data.getAirDebt() > 0) {
+            airDebtPerSec = -(maxAir / (float) cfg.safeZoneRecoverySecs());
+        } else {
+            airDebtPerSec = 0f;
+        }
+
+        float toxinPerSec;
+        if (inHazard && toxinMult > 0) {
+            toxinPerSec = (1000f / cfg.toxinBuildupSecs()) * toxinMult;
+        } else if (!inHazard && data.getToxinLevel() > 0) {
+            toxinPerSec = -(1000f / cfg.toxinRecoverySecs());
+        } else {
+            toxinPerSec = 0f;
+        }
+
+        return new Rates(airDebtPerSec, toxinPerSec);
     }
 
     public static int getToxinAmplifier(int toxinLevel, AtmosphereSettings cfg) {
@@ -174,8 +352,8 @@ public class AtmosphereEngine {
         var existing = player.getEffect(effectHolder);
         int currentAmplifier = (existing != null) ? existing.getAmplifier() : -1;
 
-        if (targetAmplifier == currentAmplifier) return; 
-        if (existing != null && existing.getDuration() != -1) return; 
+        if (targetAmplifier == currentAmplifier) return;
+        if (existing != null && existing.getDuration() != -1) return;
 
         if (existing != null) player.removeEffect(effectHolder);
         if (targetAmplifier >= 0) {

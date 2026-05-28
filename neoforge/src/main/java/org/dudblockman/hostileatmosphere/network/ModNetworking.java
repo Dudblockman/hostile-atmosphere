@@ -7,6 +7,7 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.data.AtmosphereClientData;
+import org.dudblockman.hostileatmosphere.network.SyncDivingActivePayload;
 
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = Bus.MOD)
 public class ModNetworking {
@@ -25,6 +26,12 @@ public class ModNetworking {
                 SyncToxinPayload.TYPE,
                 SyncToxinPayload.CODEC,
                 (payload, ctx) -> AtmosphereClientData.setToxin(ctx.player().getUUID(), payload.toxinLevel())
+        );
+
+        registrar.playToClient(
+                SyncDivingActivePayload.TYPE,
+                SyncDivingActivePayload.CODEC,
+                (payload, ctx) -> AtmosphereClientData.setDivingActive(ctx.player().getUUID(), payload.divingActive())
         );
     }
 }

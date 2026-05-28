@@ -1,6 +1,7 @@
 package org.dudblockman.hostileatmosphere.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
+import org.dudblockman.hostileatmosphere.registry.ModAttributes;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
 
 public class AtmosphereConfig {
@@ -31,6 +32,14 @@ public class AtmosphereConfig {
     public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_3;
     public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_4;
     public static final ModConfigSpec.DoubleValue TOXIN_RETAIN_ON_DEATH;
+
+    // --- Protection ---
+    public static final ModConfigSpec.DoubleValue UNDERWATER_AIR_DEBT_MULTIPLIER;
+    public static final ModConfigSpec.DoubleValue UNDERWATER_TOXIN_MULTIPLIER;
+    public static final ModConfigSpec.BooleanValue CONDUIT_PURIFICATION;
+    public static final ModConfigSpec.DoubleValue CONDUIT_PURIFICATION_AIR_DEBT_MULTIPLIER;
+    public static final ModConfigSpec.DoubleValue CONDUIT_PURIFICATION_TOXIN_MULTIPLIER;
+    public static final ModConfigSpec.DoubleValue EXPEDITION_TOXIN_MULTIPLIER;
 
     public static final ModConfigSpec SPEC;
 
@@ -117,6 +126,32 @@ public class AtmosphereConfig {
                 .comment("Fraction of toxin level carried through death (0.0 = full reset on death, 1.0 = full carry-over). Default: 0.5.")
                 .defineInRange("toxinRetainOnDeath", 0.5, 0.0, 1.0);
 
+        BUILDER.pop().push("protection");
+
+        UNDERWATER_AIR_DEBT_MULTIPLIER = BUILDER
+                .comment("Air debt accumulation rate multiplier when submerged with Water Breathing or Conduit Power. 0.0 = no air debt, 1.0 = normal rate. Default: 0.6.")
+                .defineInRange("underwaterAirDebtMultiplier", 0.6, 0.0, 1.0);
+
+        UNDERWATER_TOXIN_MULTIPLIER = BUILDER
+                .comment("Toxin accumulation rate multiplier when submerged with Water Breathing or Conduit Power. 0.0 = no toxin, 1.0 = normal rate. Default: 0.6.")
+                .defineInRange("underwaterToxinMultiplier", 0.6, 0.0, 1.0);
+
+        CONDUIT_PURIFICATION = BUILDER
+                .comment("If true, Conduit Power overrides the standard underwater multipliers with dedicated purification values. Default: false.")
+                .define("conduitPurification", false);
+
+        CONDUIT_PURIFICATION_AIR_DEBT_MULTIPLIER = BUILDER
+                .comment("Air debt multiplier when submerged under Conduit Power and conduitPurification is enabled. Default: 0.0 (full purification).")
+                .defineInRange("conduitPurificationAirDebtMultiplier", 0.0, 0.0, 1.0);
+
+        CONDUIT_PURIFICATION_TOXIN_MULTIPLIER = BUILDER
+                .comment("Toxin multiplier when submerged under Conduit Power and conduitPurification is enabled. Default: 0.0 (full purification).")
+                .defineInRange("conduitPurificationToxinMultiplier", 0.0, 0.0, 1.0);
+
+        EXPEDITION_TOXIN_MULTIPLIER = BUILDER
+                .comment("Toxin accumulation rate multiplier for a player wearing Create's Diving Helmet + Backtank. 0.0 = immune, 1.0 = normal rate. Stacks with underwaterToxinMultiplier when submerged. Default: 0.5.")
+                .defineInRange("expeditionToxinMultiplier", 0.5, 0.0, 1.0);
+
         BUILDER.pop();
 
         SPEC = BUILDER.build();
@@ -144,7 +179,15 @@ public class AtmosphereConfig {
                 TOXIN_THRESHOLD_3.get(),
                 TOXIN_THRESHOLD_4.get(),
                 TOXIN_RETAIN_ON_DEATH.get().floatValue(),
-                ModEffects.ATMOSPHERIC_TOXICITY
+                UNDERWATER_AIR_DEBT_MULTIPLIER.get().floatValue(),
+                UNDERWATER_TOXIN_MULTIPLIER.get().floatValue(),
+                CONDUIT_PURIFICATION.get(),
+                CONDUIT_PURIFICATION_AIR_DEBT_MULTIPLIER.get().floatValue(),
+                CONDUIT_PURIFICATION_TOXIN_MULTIPLIER.get().floatValue(),
+                EXPEDITION_TOXIN_MULTIPLIER.get().floatValue(),
+                ModEffects.ATMOSPHERIC_TOXICITY,
+                ModAttributes.AIR_DRAIN_RATE,
+                ModAttributes.TOXIN_RATE
         );
     }
 }

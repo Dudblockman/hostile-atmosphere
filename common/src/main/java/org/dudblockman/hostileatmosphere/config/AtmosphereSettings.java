@@ -2,6 +2,7 @@ package org.dudblockman.hostileatmosphere.config;
 
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.entity.ai.attributes.Attribute;
 
 public record AtmosphereSettings(
         // --- Air depletion ---
@@ -26,5 +27,14 @@ public record AtmosphereSettings(
         int toxinThreshold3,
         int toxinThreshold4,
         float toxinRetainOnDeath,
-        Holder<MobEffect> toxicityEffect
+        // --- Protection ---
+        float underwaterAirDebtMultiplier,
+        float underwaterToxinMultiplier,
+        boolean conduitPurification,
+        float conduitPurificationAirDebtMultiplier,
+        float conduitPurificationToxinMultiplier,
+        float expeditionToxinMultiplier,
+        Holder<MobEffect> toxicityEffect,
+        Holder<Attribute> airDrainRate,
+        Holder<Attribute> toxinRate
 ) {}
