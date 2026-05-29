@@ -44,4 +44,9 @@ public final class AtmosphereClientData {
     public static boolean isDivingActive(UUID id) {
         return DIVING_ACTIVE.getOrDefault(id, false);
     }
+
+    private static volatile boolean forceHeartWiggle;
+
+    public static boolean isForceHeartWiggle() { return forceHeartWiggle; }
+    public static void setForceHeartWiggle(boolean v) { forceHeartWiggle = v; }
 }

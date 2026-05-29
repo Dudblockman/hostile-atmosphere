@@ -26,16 +26,7 @@ public class AtmosphereEventHandler {
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         var entity = event.getEntity();
-        if (entity.level().isClientSide()) {
-            if (!entity.isCreative() && !entity.isSpectator()) {
-                if (AtmosphereClientData.isDivingActive(entity.getUUID())) {
-                    CreateCompat.updateVisualAir(entity);
-                } else {
-                    CreateCompat.clearVisualAir(entity);
-                }
-            }
-            return;
-        }
+        if (entity.level().isClientSide()) return;
         if (!(entity instanceof ServerPlayer player)) return;
         if (player.isCreative() || player.isSpectator()) return;
 
@@ -43,7 +34,7 @@ public class AtmosphereEventHandler {
         int oldDebt  = data.getAirDebt();
         int oldToxin = data.getToxinLevel();
 
-        var cfg = AtmosphereConfig.read();
+        var cfg = AtmosphereConfig.getSettings();
         var protection = CreateCompat.getProtection(player);
         AtmosphereEngine.tick(player, data, cfg, protection);
 
@@ -112,7 +103,7 @@ public class AtmosphereEventHandler {
         data.setSuffocationTicks(0);
 
         // Retain a fraction of toxin; clear accumulators
-        float retainFactor = AtmosphereConfig.TOXIN_RETAIN_ON_DEATH.get().floatValue();
+        float retainFactor = AtmosphereConfig.getSettings().toxinRetainOnDeath();
         int retainedToxin = Math.round(data.getToxinLevel() * retainFactor);
         data.setToxinLevel(retainedToxin);
         data.setToxinAccumulator(0f);

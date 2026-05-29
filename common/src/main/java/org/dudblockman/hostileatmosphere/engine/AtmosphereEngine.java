@@ -12,6 +12,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -106,12 +107,12 @@ public class AtmosphereEngine {
     // ==========================================================================================
 
     /**
-     * Clears and re-applies all HA-owned transient modifiers on the player's
-     * air_drain_rate and toxin_rate attributes each tick so external mods can
-     * always read the current effective rate.
+     * Updates HA-owned transient modifiers on the player's air_drain_rate and toxin_rate
+     * attributes. Each modifier is dirty-checked independently against the value already on the
+     * AttributeInstance — the instance is the source of truth, so no separate cache is needed.
      *
-     * ADD_MULTIPLIED_TOTAL stacks multiplicatively: final = base × Π(1 + value).
-     * Modifier value for desired multiplier M = M - 1.0.
+     * NaN = modifier should not be present. doubleToLongBits gives NaN == NaN.
+     * ADD_MULTIPLIED_TOTAL: final = base × Π(1 + value). Modifier value for multiplier M = M − 1.0.
      */
     private static void applyRateModifiers(ServerPlayer player, ProtectionLevel protection,
                                             AtmosphereSettings cfg) {
@@ -119,48 +120,25 @@ public class AtmosphereEngine {
         var toxinInst = player.getAttribute(cfg.toxinRate());
         if (airInst == null || toxinInst == null) return;
 
-        // Clear previous per-tick modifiers
-        airInst.removeModifier(ID_AIR_PROTECTION);
-        airInst.removeModifier(ID_AIR_UNDERWATER);
-        airInst.removeModifier(ID_AIR_RESPIRATION);
-        toxinInst.removeModifier(ID_TOXIN_PROTECTION);
-        toxinInst.removeModifier(ID_TOXIN_EXPEDITION);
-        toxinInst.removeModifier(ID_TOXIN_UNDERWATER);
-
         boolean inWater = player.isEyeInFluid(FluidTags.WATER);
+        int     resp    = getRespirationLevel(player);
 
-        // Air: SEALED or RESPIRATOR — suit supplies clean air, drain stops entirely
-        if (protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR) {
-            airInst.addTransientModifier(mult(ID_AIR_PROTECTION, -1.0));
-        }
+        syncModifier(airInst,   ID_AIR_PROTECTION,   (protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR) ? -1.0 : Double.NaN);
+        syncModifier(airInst,   ID_AIR_UNDERWATER,   inWater ? underwaterAirMult(player, protection, cfg)   - 1.0 : Double.NaN);
+        syncModifier(airInst,   ID_AIR_RESPIRATION,  resp > 0 ? 1.0 / (1.0 + 0.5 * resp) - 1.0 : Double.NaN);
+        syncModifier(toxinInst, ID_TOXIN_PROTECTION, protection == ProtectionLevel.SEALED ? -1.0 : Double.NaN);
+        syncModifier(toxinInst, ID_TOXIN_EXPEDITION, protection == ProtectionLevel.RESPIRATOR ? cfg.expeditionToxinMultiplier() - 1.0 : Double.NaN);
+        syncModifier(toxinInst, ID_TOXIN_UNDERWATER, inWater ? underwaterToxinMult(player, protection, cfg) - 1.0 : Double.NaN);
+    }
 
-        // Air: underwater reduction
-        if (inWater) {
-            double m = underwaterAirMult(player, protection, cfg);
-            airInst.addTransientModifier(mult(ID_AIR_UNDERWATER, m - 1.0));
-        }
-
-        // Air: Respiration enchantment — effective multiplier 1 / (1 + 0.5*N)
-        int resp = getRespirationLevel(player);
-        if (resp > 0) {
-            airInst.addTransientModifier(mult(ID_AIR_RESPIRATION, 1.0 / (1.0 + 0.5 * resp) - 1.0));
-        }
-
-        // Toxin: SEALED — full immunity
-        if (protection == ProtectionLevel.SEALED) {
-            toxinInst.addTransientModifier(mult(ID_TOXIN_PROTECTION, -1.0));
-        }
-
-        // Toxin: RESPIRATOR — expedition seep reduction (stacks with underwater below)
-        if (protection == ProtectionLevel.RESPIRATOR) {
-            toxinInst.addTransientModifier(mult(ID_TOXIN_EXPEDITION, cfg.expeditionToxinMultiplier() - 1.0));
-        }
-
-        // Toxin: underwater reduction
-        if (inWater) {
-            double m = underwaterToxinMult(player, protection, cfg);
-            toxinInst.addTransientModifier(mult(ID_TOXIN_UNDERWATER, m - 1.0));
-        }
+    private static void syncModifier(AttributeInstance inst, ResourceLocation id, double desired) {
+        AttributeModifier existing = inst.getModifier(id);
+        boolean shouldExist = !Double.isNaN(desired);
+        if (existing == null && !shouldExist) return;
+        if (existing != null && shouldExist
+                && Double.doubleToLongBits(existing.amount()) == Double.doubleToLongBits(desired)) return;
+        if (existing != null) inst.removeModifier(id);
+        if (shouldExist)      inst.addTransientModifier(mult(id, desired));
     }
 
     private static AttributeModifier mult(ResourceLocation id, double amount) {
@@ -271,11 +249,10 @@ public class AtmosphereEngine {
     private static int getRespirationLevel(ServerPlayer player) {
         var helmet = player.getItemBySlot(EquipmentSlot.HEAD);
         if (helmet.isEmpty()) return 0;
-        return player.level().registryAccess()
-                .lookup(Registries.ENCHANTMENT)
-                .flatMap(reg -> reg.get(Enchantments.RESPIRATION))
-                .map(h -> helmet.getEnchantments().getLevel(h))
-                .orElse(0);
+        var respHolder = player.level().registryAccess()
+                .lookupOrThrow(Registries.ENCHANTMENT)
+                .getOrThrow(Enchantments.RESPIRATION);
+        return helmet.getEnchantments().getLevel(respHolder);
     }
 
     // ==========================================================================================
@@ -312,9 +289,8 @@ public class AtmosphereEngine {
                                      AtmosphereSettings cfg, ProtectionLevel protection) {
         int maxAir = player.getMaxAirSupply();
         boolean inHazard = Mth.floor(player.getEyeY()) <= cfg.dangerYThreshold();
-        boolean fullyProtected = protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR;
 
-        applyRateModifiers(player, protection, cfg);
+        // Modifiers are maintained by tick(); just read the current attribute values.
         float airMult   = getAttributeValue(player, cfg.airDrainRate());
         float toxinMult = getAttributeValue(player, cfg.toxinRate());
 

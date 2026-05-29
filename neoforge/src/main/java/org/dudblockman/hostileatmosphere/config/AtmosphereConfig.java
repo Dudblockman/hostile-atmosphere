@@ -55,7 +55,7 @@ public class AtmosphereConfig {
                 .defineInRange("hazardTimeSecs", 480, 1, 72000);
 
         SAFE_ZONE_RECOVERY_SECS = BUILDER
-                .comment("Seconds in the safe zone to fully recover from maximum air debt. Default: 300 (5 min).")
+                .comment("Seconds in the safe zone to fully recover from maximum air debt. Default: 30 (30 s).")
                 .defineInRange("safeZoneRecoverySecs", 30, 1, 72000);
 
         GRACE_PERIOD_DAYS = BUILDER
@@ -155,6 +155,17 @@ public class AtmosphereConfig {
         BUILDER.pop();
 
         SPEC = BUILDER.build();
+        cachedSettings = read(); 
+    }
+
+    private static volatile AtmosphereSettings cachedSettings;
+
+    public static AtmosphereSettings getSettings() {
+        return cachedSettings;
+    }
+
+    public static void cacheSettings() {
+        cachedSettings = read();
     }
 
     /** Snapshot of the current config values for passing into the common engine. */

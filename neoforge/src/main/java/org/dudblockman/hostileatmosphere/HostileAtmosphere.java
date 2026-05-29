@@ -5,6 +5,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeModificationEvent;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
 import org.dudblockman.hostileatmosphere.data.ModAttachments;
@@ -20,11 +21,18 @@ public class HostileAtmosphere {
         ModEffects.MOB_EFFECTS.register(modEventBus);
         ModAttributes.ATTRIBUTES.register(modEventBus);
         modEventBus.addListener(HostileAtmosphere::onAttributeModification);
+        modEventBus.addListener(HostileAtmosphere::onConfigEvent);
         modContainer.registerConfig(ModConfig.Type.SERVER, AtmosphereConfig.SPEC);
     }
 
     private static void onAttributeModification(EntityAttributeModificationEvent event) {
         event.add(EntityType.PLAYER, ModAttributes.AIR_DRAIN_RATE);
         event.add(EntityType.PLAYER, ModAttributes.TOXIN_RATE);
+    }
+
+    private static void onConfigEvent(ModConfigEvent event) {
+        if (event.getConfig().getSpec() == AtmosphereConfig.SPEC) {
+            AtmosphereConfig.cacheSettings();
+        }
     }
 }

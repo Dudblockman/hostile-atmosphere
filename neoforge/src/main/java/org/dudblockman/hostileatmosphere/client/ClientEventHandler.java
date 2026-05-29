@@ -1,5 +1,6 @@
 package org.dudblockman.hostileatmosphere.client;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -7,7 +8,10 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerHeartTypeEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import org.dudblockman.hostileatmosphere.Constants;
+import org.dudblockman.hostileatmosphere.compat.CreateCompat;
+import org.dudblockman.hostileatmosphere.data.AtmosphereClientData;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
 
 /**
@@ -24,6 +28,33 @@ import org.dudblockman.hostileatmosphere.registry.ModEffects;
  */
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
 public class ClientEventHandler {
+
+    @SubscribeEvent
+    public static void onPlayerTick(PlayerTickEvent.Post event) {
+        var entity = event.getEntity();
+        if (!entity.level().isClientSide()) return;
+        if (entity.isCreative() || entity.isSpectator()) {
+            AtmosphereClientData.setForceHeartWiggle(false);
+            return;
+        }
+
+        // Visual backtank air
+        if (AtmosphereClientData.isDivingActive(entity.getUUID())) {
+            CreateCompat.updateVisualAir(entity);
+        } else {
+            CreateCompat.clearVisualAir(entity);
+        }
+        
+        Player localPlayer = Minecraft.getInstance().player;
+        boolean wiggle = false;
+        if (localPlayer != null && localPlayer.getUUID().equals(entity.getUUID())) {
+            MobEffectInstance inst = localPlayer.getEffect(ModEffects.ATMOSPHERIC_TOXICITY);
+            int amp = (inst != null) ? inst.getAmplifier() : -1;
+            wiggle = (amp == 1 || amp == 2)
+                    && localPlayer.getHealth() + localPlayer.getAbsorptionAmount() > 4.0F;
+        }
+        AtmosphereClientData.setForceHeartWiggle(wiggle);
+    }
 
     @SubscribeEvent
     public static void onPlayerHeartType(PlayerHeartTypeEvent event) {

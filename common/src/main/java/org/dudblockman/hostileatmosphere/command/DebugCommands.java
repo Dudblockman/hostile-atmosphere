@@ -111,6 +111,8 @@ public final class DebugCommands {
                               Consumer<ServerPlayer> removeEffect) {
         PlayerAtmosphereData data = dataGetter.apply(player);
         data.setAirDebt(0);
+        data.setDrainAccumulator(0f);
+        data.setRecoveryAccumulator(0f);
         data.setSuffocationTicks(0);
         data.setGracePeriodTicks(0);
         data.setToxinLevel(0);
