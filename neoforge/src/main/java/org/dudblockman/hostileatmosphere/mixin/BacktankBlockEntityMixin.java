@@ -1,9 +1,9 @@
 package org.dudblockman.hostileatmosphere.mixin;
 
 import com.simibubi.create.content.equipment.armor.BacktankBlockEntity;
-import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
+import org.dudblockman.hostileatmosphere.engine.AtmosphereEventHandler;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -34,9 +34,10 @@ public class BacktankBlockEntityMixin {
     )
     private void hostileatmosphere$interruptInHazard(CallbackInfo ci) {
         BlockEntity be = (BlockEntity) (Object) this;
-        Level level = be.getLevel();
-        if (level == null) return;
-        if (be.getBlockPos().getY() <= AtmosphereConfig.DANGER_Y_THRESHOLD.get()) {
+        if (!(be.getLevel() instanceof ServerLevel sl)) return;
+
+        var pos = be.getBlockPos();
+        if (AtmosphereEventHandler.findZoneAt(sl, pos.getX(), pos.getY(), pos.getZ()) != null) {
             ci.cancel();
         }
     }

@@ -45,6 +45,20 @@ public final class AtmosphereClientData {
         return DIVING_ACTIVE.getOrDefault(id, false);
     }
 
+    // ---- Mining fatigue amplifier (synced from server) --------------------------------------
+
+    private static final Map<UUID, Integer> MINING_FATIGUE_AMP = new ConcurrentHashMap<>();
+
+    public static void setMiningFatigueAmp(UUID id, int amp) {
+        if (amp < 0) MINING_FATIGUE_AMP.remove(id);
+        else MINING_FATIGUE_AMP.put(id, amp);
+    }
+
+    /** Returns -1 if no fatigue applies, 0-2 for levels I-III. */
+    public static int getMiningFatigueAmp(UUID id) {
+        return MINING_FATIGUE_AMP.getOrDefault(id, -1);
+    }
+
     private static volatile boolean forceHeartWiggle;
 
     public static boolean isForceHeartWiggle() { return forceHeartWiggle; }

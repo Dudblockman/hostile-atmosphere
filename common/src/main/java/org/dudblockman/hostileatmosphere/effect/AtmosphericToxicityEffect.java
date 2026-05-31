@@ -4,8 +4,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.ai.attributes.AttributeInstance;
-import net.minecraft.world.entity.ai.attributes.AttributeMap;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import org.dudblockman.hostileatmosphere.Constants;
@@ -14,37 +12,10 @@ public class AtmosphericToxicityEffect extends MobEffect {
 
     private static final ResourceLocation WEAKNESS_ID =
             ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "toxicity_weakness");
-    private static final ResourceLocation MINING_FATIGUE_ID =
-            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "toxicity_mining_fatigue");
 
     public AtmosphericToxicityEffect() {
-        super(MobEffectCategory.HARMFUL, 0x3D6B2E); // sickly dark green
+        super(MobEffectCategory.HARMFUL, 0x3D6B2E);
         addAttributeModifier(Attributes.ATTACK_DAMAGE, WEAKNESS_ID, -2.0, AttributeModifier.Operation.ADD_VALUE);
-    }
-
-    @Override
-    public void addAttributeModifiers(AttributeMap attributeMap, int amplifier) {
-        super.addAttributeModifiers(attributeMap, amplifier); 
-        if (amplifier >= 1) {
-            AttributeInstance miningInst = attributeMap.getInstance(Attributes.MINING_EFFICIENCY);
-            if (miningInst != null) {
-                miningInst.removeModifier(MINING_FATIGUE_ID); 
-                miningInst.addTransientModifier(new AttributeModifier(
-                        MINING_FATIGUE_ID,
-                        -2.0 * amplifier, 
-                        AttributeModifier.Operation.ADD_VALUE
-                ));
-            }
-        }
-    }
-
-    @Override
-    public void removeAttributeModifiers(AttributeMap attributeMap) {
-        super.removeAttributeModifiers(attributeMap); // removes Weakness
-        AttributeInstance miningInst = attributeMap.getInstance(Attributes.MINING_EFFICIENCY);
-        if (miningInst != null) {
-            miningInst.removeModifier(MINING_FATIGUE_ID);
-        }
     }
 
     @Override
@@ -53,7 +24,7 @@ public class AtmosphericToxicityEffect extends MobEffect {
             int interval = (amplifier >= 3) ? 20 : 25;
             return (duration % interval) == 0;
         }
-        return false; 
+        return false;
     }
 
     @Override

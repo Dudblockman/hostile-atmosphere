@@ -9,8 +9,6 @@ public class AtmosphereConfig {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
     // --- Atmosphere ---
-    public static final ModConfigSpec.IntValue DANGER_Y_THRESHOLD;
-    public static final ModConfigSpec.IntValue HAZARD_TIME_SECS;
     public static final ModConfigSpec.IntValue SAFE_ZONE_RECOVERY_SECS;
     public static final ModConfigSpec.IntValue GRACE_PERIOD_DAYS;
 
@@ -25,13 +23,12 @@ public class AtmosphereConfig {
     public static final ModConfigSpec.DoubleValue RAMP_INTERVAL_TIER3_SECS;
 
     // --- Toxin buildup ---
-    public static final ModConfigSpec.IntValue TOXIN_BUILDUP_SECS;
     public static final ModConfigSpec.IntValue TOXIN_RECOVERY_SECS;
     public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_1;
     public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_2;
     public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_3;
     public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_4;
-    public static final ModConfigSpec.DoubleValue TOXIN_RETAIN_ON_DEATH;
+    public static final ModConfigSpec.IntValue TOXIN_DEATH_CAP;
 
     // --- Protection ---
     public static final ModConfigSpec.DoubleValue UNDERWATER_AIR_DEBT_MULTIPLIER;
@@ -46,16 +43,8 @@ public class AtmosphereConfig {
     static {
         BUILDER.push("atmosphere");
 
-        DANGER_Y_THRESHOLD = BUILDER
-                .comment("Y level at or below which the atmosphere is dangerous.")
-                .defineInRange("dangerYThreshold", 96, -64, 320);
-
-        HAZARD_TIME_SECS = BUILDER
-                .comment("Seconds of unprotected exposure before air is fully depleted. Default: 480 (8 min).")
-                .defineInRange("hazardTimeSecs", 480, 1, 72000);
-
         SAFE_ZONE_RECOVERY_SECS = BUILDER
-                .comment("Seconds in the safe zone to fully recover from maximum air debt. Default: 30 (30 s).")
+                .comment("Seconds in the safe zone to fully recover from maximum air debt. Default: 30.")
                 .defineInRange("safeZoneRecoverySecs", 30, 1, 72000);
 
         GRACE_PERIOD_DAYS = BUILDER
@@ -98,10 +87,6 @@ public class AtmosphereConfig {
 
         BUILDER.pop().push("toxin");
 
-        TOXIN_BUILDUP_SECS = BUILDER
-                .comment("Seconds of continuous hazard-zone exposure to go from 0 to maximum toxin (1000). Default: 2400 (40 min).")
-                .defineInRange("toxinBuildupSecs", 2400, 1, 864000);
-
         TOXIN_RECOVERY_SECS = BUILDER
                 .comment("Seconds in the safe zone to clear from maximum toxin (1000) to zero. Default: 14400 (240 min).")
                 .defineInRange("toxinRecoverySecs", 14400, 1, 864000);
@@ -115,25 +100,25 @@ public class AtmosphereConfig {
                 .defineInRange("toxinThreshold2", 500, 0, 1000);
 
         TOXIN_THRESHOLD_3 = BUILDER
-                .comment("Toxin level at which Atmospheric Toxicity III activates (above + Poison-style damage). Default: 750.")
+                .comment("Toxin level at which Atmospheric Toxicity III activates. Default: 750.")
                 .defineInRange("toxinThreshold3", 750, 0, 1000);
 
         TOXIN_THRESHOLD_4 = BUILDER
-                .comment("Toxin level at which Atmospheric Toxicity IV activates (above + Wither-style damage). Default: 950.")
+                .comment("Toxin level at which Atmospheric Toxicity IV activates. Default: 950.")
                 .defineInRange("toxinThreshold4", 950, 0, 1000);
 
-        TOXIN_RETAIN_ON_DEATH = BUILDER
-                .comment("Fraction of toxin level carried through death (0.0 = full reset on death, 1.0 = full carry-over). Default: 0.5.")
-                .defineInRange("toxinRetainOnDeath", 0.5, 0.0, 1.0);
+        TOXIN_DEATH_CAP = BUILDER
+                .comment("Toxin level cap applied on death — if current toxin exceeds this, it is reduced to this value; if below, it is unchanged. Range 0–1000. Default: 500.")
+                .defineInRange("toxinDeathCap", 500, 0, 1000);
 
         BUILDER.pop().push("protection");
 
         UNDERWATER_AIR_DEBT_MULTIPLIER = BUILDER
-                .comment("Air debt accumulation rate multiplier when submerged with Water Breathing or Conduit Power. 0.0 = no air debt, 1.0 = normal rate. Default: 0.6.")
+                .comment("Air debt accumulation rate multiplier when submerged with Water Breathing or Conduit Power. Default: 0.6.")
                 .defineInRange("underwaterAirDebtMultiplier", 0.6, 0.0, 1.0);
 
         UNDERWATER_TOXIN_MULTIPLIER = BUILDER
-                .comment("Toxin accumulation rate multiplier when submerged with Water Breathing or Conduit Power. 0.0 = no toxin, 1.0 = normal rate. Default: 0.6.")
+                .comment("Toxin accumulation rate multiplier when submerged with Water Breathing or Conduit Power. Default: 0.6.")
                 .defineInRange("underwaterToxinMultiplier", 0.6, 0.0, 1.0);
 
         CONDUIT_PURIFICATION = BUILDER
@@ -141,21 +126,20 @@ public class AtmosphereConfig {
                 .define("conduitPurification", false);
 
         CONDUIT_PURIFICATION_AIR_DEBT_MULTIPLIER = BUILDER
-                .comment("Air debt multiplier when submerged under Conduit Power and conduitPurification is enabled. Default: 0.0 (full purification).")
+                .comment("Air debt multiplier when submerged under Conduit Power and conduitPurification is enabled. Default: 0.0.")
                 .defineInRange("conduitPurificationAirDebtMultiplier", 0.0, 0.0, 1.0);
 
         CONDUIT_PURIFICATION_TOXIN_MULTIPLIER = BUILDER
-                .comment("Toxin multiplier when submerged under Conduit Power and conduitPurification is enabled. Default: 0.0 (full purification).")
+                .comment("Toxin multiplier when submerged under Conduit Power and conduitPurification is enabled. Default: 0.0.")
                 .defineInRange("conduitPurificationToxinMultiplier", 0.0, 0.0, 1.0);
 
         EXPEDITION_TOXIN_MULTIPLIER = BUILDER
-                .comment("Toxin accumulation rate multiplier for a player wearing Create's Diving Helmet + Backtank. 0.0 = immune, 1.0 = normal rate. Stacks with underwaterToxinMultiplier when submerged. Default: 0.5.")
+                .comment("Toxin rate multiplier for a player wearing Create's Diving Helmet + Backtank. Default: 0.5.")
                 .defineInRange("expeditionToxinMultiplier", 0.5, 0.0, 1.0);
 
         BUILDER.pop();
 
         SPEC = BUILDER.build();
-        cachedSettings = read(); 
     }
 
     private static volatile AtmosphereSettings cachedSettings;
@@ -171,8 +155,6 @@ public class AtmosphereConfig {
     /** Snapshot of the current config values for passing into the common engine. */
     public static AtmosphereSettings read() {
         return new AtmosphereSettings(
-                DANGER_Y_THRESHOLD.get(),
-                HAZARD_TIME_SECS.get(),
                 SAFE_ZONE_RECOVERY_SECS.get(),
                 GRACE_PERIOD_DAYS.get(),
                 RAMP_TIER2_SECS.get(),
@@ -183,13 +165,12 @@ public class AtmosphereConfig {
                 RAMP_INTERVAL_TIER1_SECS.get().floatValue(),
                 RAMP_INTERVAL_TIER2_SECS.get().floatValue(),
                 RAMP_INTERVAL_TIER3_SECS.get().floatValue(),
-                TOXIN_BUILDUP_SECS.get(),
                 TOXIN_RECOVERY_SECS.get(),
                 TOXIN_THRESHOLD_1.get(),
                 TOXIN_THRESHOLD_2.get(),
                 TOXIN_THRESHOLD_3.get(),
                 TOXIN_THRESHOLD_4.get(),
-                TOXIN_RETAIN_ON_DEATH.get().floatValue(),
+                TOXIN_DEATH_CAP.get(),
                 UNDERWATER_AIR_DEBT_MULTIPLIER.get().floatValue(),
                 UNDERWATER_TOXIN_MULTIPLIER.get().floatValue(),
                 CONDUIT_PURIFICATION.get(),

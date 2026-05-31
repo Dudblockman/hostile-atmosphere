@@ -6,8 +6,6 @@ import net.minecraft.world.entity.ai.attributes.Attribute;
 
 public record AtmosphereSettings(
         // --- Air depletion ---
-        int dangerYThreshold,
-        int hazardTimeSecs,
         int safeZoneRecoverySecs,
         int gracePeriodDays,
         // --- Miasma damage ramp ---
@@ -19,14 +17,13 @@ public record AtmosphereSettings(
         float rampIntervalTier1Secs,
         float rampIntervalTier2Secs,
         float rampIntervalTier3Secs,
-        // --- Toxin buildup ---
-        int toxinBuildupSecs,
+        // --- Toxin ---
         int toxinRecoverySecs,
         int toxinThreshold1,
         int toxinThreshold2,
         int toxinThreshold3,
         int toxinThreshold4,
-        float toxinRetainOnDeath,
+        int toxinDeathCap,
         // --- Protection ---
         float underwaterAirDebtMultiplier,
         float underwaterToxinMultiplier,

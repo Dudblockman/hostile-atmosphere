@@ -7,11 +7,11 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.Mth;
 import org.dudblockman.hostileatmosphere.compat.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.engine.AtmosphereEngine;
+import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -26,14 +26,16 @@ public final class DebugCommands {
             Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
             Supplier<AtmosphereSettings> configGetter,
             Consumer<ServerPlayer> removeEffect,
-            Function<ServerPlayer, ProtectionLevel> protectionGetter) {
+            Function<ServerPlayer, ProtectionLevel> protectionGetter,
+            Function<ServerPlayer, ZoneDefinition> activeZoneGetter,
+            Function<ServerPlayer, Double> atmosphereLevelGetter) {
 
         dispatcher.register(Commands.literal("atmosphere")
                 .requires(src -> src.hasPermission(2))
                 .then(Commands.literal("status")
-                        .executes(ctx -> status(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, configGetter, protectionGetter))
+                        .executes(ctx -> status(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, configGetter, protectionGetter, activeZoneGetter, atmosphereLevelGetter))
                         .then(Commands.argument("player", EntityArgument.player())
-                                .executes(ctx -> status(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), dataGetter, configGetter, protectionGetter))))
+                                .executes(ctx -> status(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), dataGetter, configGetter, protectionGetter, activeZoneGetter, atmosphereLevelGetter))))
                 .then(Commands.literal("reset")
                         .executes(ctx -> reset(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, removeEffect))
                         .then(Commands.argument("player", EntityArgument.player())
@@ -69,29 +71,44 @@ public final class DebugCommands {
     private static int status(CommandSourceStack src, ServerPlayer player,
                                Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
                                Supplier<AtmosphereSettings> configGetter,
-                               Function<ServerPlayer, ProtectionLevel> protectionGetter) {
+                               Function<ServerPlayer, ProtectionLevel> protectionGetter,
+                               Function<ServerPlayer, ZoneDefinition> activeZoneGetter,
+                               Function<ServerPlayer, Double> atmosphereLevelGetter) {
         PlayerAtmosphereData data = dataGetter.apply(player);
         AtmosphereSettings cfg = configGetter.get();
-        int maxAir  = player.getMaxAirSupply();
-        boolean inHazard = Mth.floor(player.getEyeY()) <= cfg.dangerYThreshold();
+        int maxAir = player.getMaxAirSupply();
+        ZoneDefinition activeZone = activeZoneGetter.apply(player);
         ProtectionLevel protection = protectionGetter.apply(player);
+        double atmosphereLevel = atmosphereLevelGetter.apply(player);
+
+        String zoneStr;
+        if (activeZone == null) {
+            zoneStr = "§aSAFE§r";
+        } else {
+            int effectiveCeiling = (int)(activeZone.yCeiling() + atmosphereLevel);
+            String ceilStr = (atmosphereLevel != 0.0)
+                    ? String.format("%d(%+.1f)", effectiveCeiling, atmosphereLevel)
+                    : String.valueOf(activeZone.yCeiling());
+            zoneStr = String.format("§cHAZARD§r (y<=%s, %ds, tox%ds)",
+                    ceilStr, activeZone.hazardTimeSecs(), activeZone.toxinBuildupSecs());
+        }
 
         int toxin = data.getToxinLevel();
         int amp   = AtmosphereEngine.getToxinAmplifier(toxin, cfg);
         String ampStr = (amp < 0) ? "none" : "L" + (amp + 1) + " (amp " + amp + ")";
 
-        AtmosphereEngine.Rates rates = AtmosphereEngine.computeRates(player, data, cfg, protection);
+        AtmosphereEngine.Rates rates = AtmosphereEngine.computeRates(player, data, cfg, protection, activeZone);
         String airRateStr = formatRate(rates.airDebtPerSec(), data.getAirDebt(), maxAir - data.getAirDebt());
         String toxRateStr = formatRate(rates.toxinPerSec(),   toxin, 1000 - toxin);
 
         src.sendSuccess(() -> Component.literal(String.format(
-                "[HA] %s | eyeY=%d | %s | protection=%s\n" +
+                "[HA] %s | eyeY=%.1f | %s | protection=%s\n" +
                 "  airDebt=%d/%d  ceiling=%d  air=%d  suffTicks=%d  graceTicks=%d\n" +
                 "  toxin=%d/1000  effect=%s\n" +
                 "  airDebt: %s | toxin: %s",
                 player.getName().getString(),
-                Mth.floor(player.getEyeY()),
-                inHazard ? "§cHAZARD§r" : "§aSAFE§r",
+                player.getEyeY(),
+                zoneStr,
                 protection.name(),
                 data.getAirDebt(), maxAir,
                 maxAir - data.getAirDebt(),
@@ -158,6 +175,26 @@ public final class DebugCommands {
         return 1;
     }
 
+    private static int showConfig(CommandSourceStack src, Supplier<AtmosphereSettings> configGetter) {
+        AtmosphereSettings cfg = configGetter.get();
+        src.sendSuccess(() -> Component.literal(String.format(
+                "[HA] Config:\n" +
+                "  recovery=%ds  grace=%dd\n" +
+                "  ramp: t2=%ds t3=%ds | dmg/interval: %.1f/%.2fs  %.1f/%.2fs  %.1f/%.2fs\n" +
+                "  toxin: recovery=%ds  deathCap=%d\n" +
+                "  thresholds: I=%d  II=%d  III=%d  IV=%d\n" +
+                "  (zones are data-pack driven — see data/hostileatmosphere/zones/)",
+                cfg.safeZoneRecoverySecs(), cfg.gracePeriodDays(),
+                cfg.rampTier2Secs(), cfg.rampTier3Secs(),
+                cfg.rampDamageTier1(), cfg.rampIntervalTier1Secs(),
+                cfg.rampDamageTier2(), cfg.rampIntervalTier2Secs(),
+                cfg.rampDamageTier3(), cfg.rampIntervalTier3Secs(),
+                cfg.toxinRecoverySecs(), cfg.toxinDeathCap(),
+                cfg.toxinThreshold1(), cfg.toxinThreshold2(), cfg.toxinThreshold3(), cfg.toxinThreshold4()
+        )), false);
+        return 1;
+    }
+
     /** Formats a signed per-second rate with an ETA to the relevant limit. */
     private static String formatRate(float perSec, int current, int remaining) {
         if (perSec == 0f) return "stable";
@@ -171,25 +208,5 @@ public final class DebugCommands {
         if (secs >= 3600) return String.format("%dh%02dm", secs / 3600, (secs % 3600) / 60);
         if (secs >= 60)   return String.format("%dm%02ds", secs / 60, secs % 60);
         return secs + "s";
-    }
-
-    private static int showConfig(CommandSourceStack src, Supplier<AtmosphereSettings> configGetter) {
-        AtmosphereSettings cfg = configGetter.get();
-        src.sendSuccess(() -> Component.literal(String.format(
-                "[HA] Config:\n" +
-                "  dangerY=%d  hazardTime=%ds  recovery=%ds  grace=%dd\n" +
-                "  ramp: t2=%ds t3=%ds | dmg/interval: %.1f/%.2fs  %.1f/%.2fs  %.1f/%.2fs\n" +
-                "  toxin: buildup=%ds  recovery=%ds  retain=%.1f\n" +
-                "  thresholds: I=%d  II=%d  III=%d  IV=%d",
-                cfg.dangerYThreshold(),
-                cfg.hazardTimeSecs(), cfg.safeZoneRecoverySecs(), cfg.gracePeriodDays(),
-                cfg.rampTier2Secs(), cfg.rampTier3Secs(),
-                cfg.rampDamageTier1(), cfg.rampIntervalTier1Secs(),
-                cfg.rampDamageTier2(), cfg.rampIntervalTier2Secs(),
-                cfg.rampDamageTier3(), cfg.rampIntervalTier3Secs(),
-                cfg.toxinBuildupSecs(), cfg.toxinRecoverySecs(), cfg.toxinRetainOnDeath(),
-                cfg.toxinThreshold1(), cfg.toxinThreshold2(), cfg.toxinThreshold3(), cfg.toxinThreshold4()
-        )), false);
-        return 1;
     }
 }

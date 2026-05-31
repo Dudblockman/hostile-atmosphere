@@ -11,6 +11,7 @@ import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
 import org.dudblockman.hostileatmosphere.data.ModAttachments;
 import org.dudblockman.hostileatmosphere.registry.ModAttributes;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
+import org.dudblockman.hostileatmosphere.registry.ModRegistries;
 
 @Mod(Constants.MOD_ID)
 public class HostileAtmosphere {
@@ -22,6 +23,7 @@ public class HostileAtmosphere {
         ModAttributes.ATTRIBUTES.register(modEventBus);
         modEventBus.addListener(HostileAtmosphere::onAttributeModification);
         modEventBus.addListener(HostileAtmosphere::onConfigEvent);
+        modEventBus.addListener(ModRegistries::onNewDataPackRegistry);
         modContainer.registerConfig(ModConfig.Type.SERVER, AtmosphereConfig.SPEC);
     }
 

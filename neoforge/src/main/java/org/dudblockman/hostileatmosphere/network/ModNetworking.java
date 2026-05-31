@@ -25,7 +25,10 @@ public class ModNetworking {
         registrar.playToClient(
                 SyncToxinPayload.TYPE,
                 SyncToxinPayload.CODEC,
-                (payload, ctx) -> AtmosphereClientData.setToxin(ctx.player().getUUID(), payload.toxinLevel())
+                (payload, ctx) -> {
+                    AtmosphereClientData.setToxin(ctx.player().getUUID(), payload.toxinLevel());
+                    AtmosphereClientData.setMiningFatigueAmp(ctx.player().getUUID(), payload.miningFatigueAmp());
+                }
         );
 
         registrar.playToClient(
