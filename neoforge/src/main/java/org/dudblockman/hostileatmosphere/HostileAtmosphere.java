@@ -12,6 +12,7 @@ import org.dudblockman.hostileatmosphere.data.ModAttachments;
 import org.dudblockman.hostileatmosphere.registry.ModAttributes;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
 import org.dudblockman.hostileatmosphere.registry.ModRegistries;
+import org.dudblockman.hostileatmosphere.test.GameTestRegistration;
 
 @Mod(Constants.MOD_ID)
 public class HostileAtmosphere {
@@ -24,6 +25,7 @@ public class HostileAtmosphere {
         modEventBus.addListener(HostileAtmosphere::onAttributeModification);
         modEventBus.addListener(HostileAtmosphere::onConfigEvent);
         modEventBus.addListener(ModRegistries::onNewDataPackRegistry);
+        modEventBus.addListener(GameTestRegistration::onRegisterGameTests); // test classes must be on main classpath for NeoForge game test scanning
         modContainer.registerConfig(ModConfig.Type.SERVER, AtmosphereConfig.SPEC);
     }
 
@@ -33,7 +35,8 @@ public class HostileAtmosphere {
     }
 
     private static void onConfigEvent(ModConfigEvent event) {
-        if (event.getConfig().getSpec() == AtmosphereConfig.SPEC) {
+        if (event.getConfig().getSpec() == AtmosphereConfig.SPEC
+                && !(event instanceof ModConfigEvent.Unloading)) {
             AtmosphereConfig.cacheSettings();
         }
     }
