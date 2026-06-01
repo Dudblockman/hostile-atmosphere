@@ -93,6 +93,7 @@ dependencies {
     localRuntime "mezz.jei:jei-1.21.1-neoforge:${jei_neoforge_version}"
     compileOnly("com.simibubi.create:create-1.21.1:${create_neoforge_version}") { transitive = false }
     localRuntime("com.simibubi.create:create-1.21.1:${create_neoforge_version}") { transitive = false }
+    compileOnly("dev.ryanhcode.sable-companion:sable-companion-common-1.21.1:${sable_companion_version}") { transitive = false }
     localRuntime("dev.simulated_team.simulated:simulated-neoforge-1.21.1:${create_aeronautics_version}") { transitive = false }
     localRuntime("dev.eriksonn.aeronautics:aeronautics-neoforge-1.21.1:${create_aeronautics_version}") { transitive = false }
     localRuntime("dev.ryanhcode.offroad:offroad-neoforge-1.21.1:${create_aeronautics_version}") { transitive = false }

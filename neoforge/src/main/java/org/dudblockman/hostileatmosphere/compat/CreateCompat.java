@@ -70,12 +70,6 @@ public final class CreateCompat {
                 return ProtectionLevel.RESPIRATOR;
             }
 
-            // --- Tier 1: Filled backtank, no diving helmet ------------
-            // Provides no direct protection in open air; counts as Water Breathing when submerged.
-            if (BacktankUtil.hasAirRemaining(chest)) {
-                return ProtectionLevel.BACKTANK_ONLY;
-            }
-
             return ProtectionLevel.NONE;
         }
 

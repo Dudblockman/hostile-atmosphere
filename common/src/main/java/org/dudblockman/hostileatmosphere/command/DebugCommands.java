@@ -28,14 +28,14 @@ public final class DebugCommands {
             Consumer<ServerPlayer> removeEffect,
             Function<ServerPlayer, ProtectionLevel> protectionGetter,
             Function<ServerPlayer, ZoneDefinition> activeZoneGetter,
-            Function<ServerPlayer, Double> atmosphereLevelGetter) {
+            Function<ServerPlayer, Double> effectiveCeilingGetter) {
 
         dispatcher.register(Commands.literal("atmosphere")
                 .requires(src -> src.hasPermission(2))
                 .then(Commands.literal("status")
-                        .executes(ctx -> status(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, configGetter, protectionGetter, activeZoneGetter, atmosphereLevelGetter))
+                        .executes(ctx -> status(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, configGetter, protectionGetter, activeZoneGetter, effectiveCeilingGetter))
                         .then(Commands.argument("player", EntityArgument.player())
-                                .executes(ctx -> status(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), dataGetter, configGetter, protectionGetter, activeZoneGetter, atmosphereLevelGetter))))
+                                .executes(ctx -> status(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), dataGetter, configGetter, protectionGetter, activeZoneGetter, effectiveCeilingGetter))))
                 .then(Commands.literal("reset")
                         .executes(ctx -> reset(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, removeEffect))
                         .then(Commands.argument("player", EntityArgument.player())
@@ -73,24 +73,20 @@ public final class DebugCommands {
                                Supplier<AtmosphereSettings> configGetter,
                                Function<ServerPlayer, ProtectionLevel> protectionGetter,
                                Function<ServerPlayer, ZoneDefinition> activeZoneGetter,
-                               Function<ServerPlayer, Double> atmosphereLevelGetter) {
+                               Function<ServerPlayer, Double> effectiveCeilingGetter) {
         PlayerAtmosphereData data = dataGetter.apply(player);
         AtmosphereSettings cfg = configGetter.get();
         int maxAir = player.getMaxAirSupply();
         ZoneDefinition activeZone = activeZoneGetter.apply(player);
         ProtectionLevel protection = protectionGetter.apply(player);
-        double atmosphereLevel = atmosphereLevelGetter.apply(player);
 
         String zoneStr;
         if (activeZone == null) {
             zoneStr = "§aSAFE§r";
         } else {
-            int effectiveCeiling = (int)(activeZone.yCeiling() + atmosphereLevel);
-            String ceilStr = (atmosphereLevel != 0.0)
-                    ? String.format("%d(%+.1f)", effectiveCeiling, atmosphereLevel)
-                    : String.valueOf(activeZone.yCeiling());
-            zoneStr = String.format("§cHAZARD§r (y<=%s, %ds, tox%ds)",
-                    ceilStr, activeZone.hazardTimeSecs(), activeZone.toxinBuildupSecs());
+            double effectiveCeiling = effectiveCeilingGetter.apply(player);
+            zoneStr = String.format("§cHAZARD§r (y<=%.0f, %ds, tox%ds)",
+                    effectiveCeiling, activeZone.hazardTimeSecs(), activeZone.toxinBuildupSecs());
         }
 
         int toxin = data.getToxinLevel();

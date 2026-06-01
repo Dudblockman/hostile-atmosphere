@@ -36,11 +36,14 @@ public class AtmosphereEngine {
 
     /**
      * Returns the most severe zone the player is in using a global atmosphere level offset.
-     * Zones must be sorted ascending by yCeiling (lowest = most severe first).
+     * Zones must be sorted ascending by evalCeiling (lowest = most severe first).
+     * {@code tick}, {@code x}, {@code z} are passed to each zone's ceiling pipeline.
      */
-    public static ZoneDefinition findZone(List<ZoneDefinition> zones, double eyeY, double atmosphereLevel) {
+    public static ZoneDefinition findZone(List<ZoneDefinition> zones,
+                                          long tick, double x, double eyeY, double z,
+                                          double atmosphereLevel) {
         for (ZoneDefinition zone : zones) {
-            if (eyeY <= zone.yCeiling() + atmosphereLevel) return zone;
+            if (eyeY <= zone.evalCeiling(tick, x, z) + atmosphereLevel) return zone;
         }
         return null;
     }
@@ -48,12 +51,14 @@ public class AtmosphereEngine {
     /**
      * Returns the most severe zone, using per-zone level offsets.
      * {@code zoneIds} is parallel to {@code zones}; {@code levelForZone} maps a zone id → its level offset.
+     * {@code tick}, {@code x}, {@code z} are passed to each zone's ceiling pipeline.
      */
     public static ZoneDefinition findZone(List<ZoneDefinition> zones, List<String> zoneIds,
-                                          double eyeY, Function<String, Double> levelForZone) {
+                                          long tick, double x, double eyeY, double z,
+                                          Function<String, Double> levelForZone) {
         for (int i = 0; i < zones.size(); i++) {
             String id = i < zoneIds.size() ? zoneIds.get(i) : "all";
-            if (eyeY <= zones.get(i).yCeiling() + levelForZone.apply(id)) return zones.get(i);
+            if (eyeY <= zones.get(i).evalCeiling(tick, x, z) + levelForZone.apply(id)) return zones.get(i);
         }
         return null;
     }
@@ -189,8 +194,7 @@ public class AtmosphereEngine {
                     : cfg.underwaterAirDebtMultiplier();
         }
         if (player.hasEffect(MobEffects.WATER_BREATHING)
-                || player.getItemBySlot(EquipmentSlot.HEAD).is(Items.TURTLE_HELMET)
-                || protection == ProtectionLevel.BACKTANK_ONLY) {
+                || player.getItemBySlot(EquipmentSlot.HEAD).is(Items.TURTLE_HELMET)) {
             return cfg.underwaterAirDebtMultiplier();
         }
         return 1.0;
@@ -204,7 +208,6 @@ public class AtmosphereEngine {
                     : cfg.underwaterToxinMultiplier();
         }
         if (player.hasEffect(MobEffects.WATER_BREATHING)
-                || protection == ProtectionLevel.BACKTANK_ONLY
                 || protection == ProtectionLevel.RESPIRATOR) {
             return cfg.underwaterToxinMultiplier();
         }

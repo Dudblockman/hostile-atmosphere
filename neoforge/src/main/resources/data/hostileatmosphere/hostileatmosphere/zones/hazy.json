@@ -1,5 +1,8 @@
 {
-  "yCeiling": 96,
+  "dimension": "minecraft:overworld",
+  "ceiling": [
+    {"operation": "add", "source": {"type": "constant", "value": 66}}
+  ],
   "hazardTimeSecs": 480,
   "toxinBuildupSecs": 2400
 }
