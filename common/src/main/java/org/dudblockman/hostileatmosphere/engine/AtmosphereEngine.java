@@ -165,7 +165,7 @@ public class AtmosphereEngine {
         int     resp    = getRespirationLevel(player);
 
         syncModifier(airInst,   ID_AIR_PROTECTION,   (protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR) ? -1.0 : Double.NaN);
-        syncModifier(airInst,   ID_AIR_UNDERWATER,   inWater ? underwaterAirMult(player, protection, cfg)   - 1.0 : Double.NaN);
+        syncModifier(airInst,   ID_AIR_UNDERWATER,   inWater ? underwaterAirMult(player, cfg)   - 1.0 : Double.NaN);
         syncModifier(airInst,   ID_AIR_RESPIRATION,  resp > 0 ? 1.0 / (1.0 + 0.5 * resp) - 1.0 : Double.NaN);
         syncModifier(toxinInst, ID_TOXIN_PROTECTION, protection == ProtectionLevel.SEALED ? -1.0 : Double.NaN);
         syncModifier(toxinInst, ID_TOXIN_EXPEDITION, protection == ProtectionLevel.RESPIRATOR ? cfg.expeditionToxinMultiplier() - 1.0 : Double.NaN);
@@ -195,8 +195,7 @@ public class AtmosphereEngine {
     // Protection helpers (return the raw multiplier for underwater conditions)
     // ==========================================================================================
 
-    private static double underwaterAirMult(ServerPlayer player, ProtectionLevel protection,
-                                             AtmosphereSettings cfg) {
+    private static double underwaterAirMult(ServerPlayer player, AtmosphereSettings cfg) {
         if (player.hasEffect(MobEffects.CONDUIT_POWER)) {
             return cfg.conduitPurification()
                     ? cfg.conduitPurificationAirDebtMultiplier()

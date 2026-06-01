@@ -12,7 +12,6 @@ import org.dudblockman.hostileatmosphere.Constants;
 import java.util.Map;
 import java.util.TreeMap;
 
-@SuppressWarnings("null")
 public class AtmosphereProgressionData extends SavedData {
 
     private static final String DATA_NAME = Constants.MOD_ID + "_progression";
@@ -113,6 +112,7 @@ public class AtmosphereProgressionData extends SavedData {
 
     // ------------------------------------------------------------------------------------------
 
+    @SuppressWarnings("null")
     @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         ListTag list = new ListTag();
@@ -124,6 +124,7 @@ public class AtmosphereProgressionData extends SavedData {
         return tag;
     }
 
+    @SuppressWarnings("null")
     private static AtmosphereProgressionData load(CompoundTag tag, HolderLookup.Provider registries) {
         AtmosphereProgressionData data = new AtmosphereProgressionData();
         ListTag list = tag.getList("modifiers", Tag.TAG_COMPOUND);

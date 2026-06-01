@@ -19,17 +19,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Prevents a placed backtank block entity from charging while in the hazard zone.
- * Injects right before the airLevelTimer decrement — after super.tick(), speed == 0,
- * and waterlogged guards have all already run. Runs on both the server tick (cancels
- * the actual fill) and the client tick (cancels the charging particle spawn).
- *
- * Sable sub-levels: the block entity's block pos is local to the sub-level's plot chunk.
- * When Sable is installed the companion API transforms those local coords to world-space
- * before the zone check so the result is correct regardless of where the sub-level drifts.
- *
- * Zone check uses {@link AtmosphereEventHandler#findZoneAt(Level, double, double, double)},
- * which dispatches to full Perlin data server-side and base registry ceilings client-side.
+ * Stops a placed backtank from charging in the hazard zone.
+ * Sable sub-levels: block pos is local; SableCompat transforms to world-space before the zone check.
  */
 @Pseudo
 @Mixin(value = BacktankBlockEntity.class, remap = false)
