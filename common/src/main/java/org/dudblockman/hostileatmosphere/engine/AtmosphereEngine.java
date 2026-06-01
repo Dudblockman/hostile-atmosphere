@@ -287,10 +287,11 @@ public class AtmosphereEngine {
     private static int getRespirationLevel(ServerPlayer player) {
         var helmet = player.getItemBySlot(EquipmentSlot.HEAD);
         if (helmet.isEmpty()) return 0;
-        var respHolder = player.level().registryAccess()
-                .lookupOrThrow(Registries.ENCHANTMENT)
-                .getOrThrow(Enchantments.RESPIRATION);
-        return helmet.getEnchantments().getLevel(respHolder);
+        return player.level().registryAccess()
+                .lookup(Registries.ENCHANTMENT)
+                .flatMap(reg -> reg.get(Enchantments.RESPIRATION))
+                .map(h -> helmet.getEnchantments().getLevel(h))
+                .orElse(0);
     }
 
     // ==========================================================================================
@@ -361,7 +362,6 @@ public class AtmosphereEngine {
         int currentAmplifier = (existing != null) ? existing.getAmplifier() : -1;
 
         if (targetAmplifier == currentAmplifier) return;
-        if (existing != null && existing.getDuration() != -1) return;
 
         if (existing != null) player.removeEffect(effectHolder);
         if (targetAmplifier >= 0) {

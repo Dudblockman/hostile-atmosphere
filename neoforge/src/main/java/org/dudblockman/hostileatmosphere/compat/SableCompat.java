@@ -1,18 +1,23 @@
 package org.dudblockman.hostileatmosphere.compat;
 
-import dev.ryanhcode.sable.companion.SableCompanion;
-import dev.ryanhcode.sable.companion.SubLevelAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 
+/**
+ * Soft dependency on Sable. All Sable type references are confined to the
+ * static-nested {@link Delegate} class, which the JVM loads only when Sable
+ * is present — so this outer class is safe to load without Sable.
+ */
 public final class SableCompat {
+
+    private static final boolean LOADED = ModList.get().isLoaded("sable");
 
     private SableCompat() {}
 
     public static boolean isLoaded() {
-        return ModList.get().isLoaded("sable");
+        return LOADED;
     }
 
     /**
@@ -21,7 +26,7 @@ public final class SableCompat {
      * Only call this when {@link #isLoaded()} is true.
      */
     public static Vec3 getWorldSpacePos(BlockEntity be) {
-        return getWorldSpacePos(be, 0.0);
+        return Delegate.getWorldSpacePos(be, 0.0);
     }
 
     /**
@@ -30,11 +35,18 @@ public final class SableCompat {
      * sub-level's orientation (e.g. a tilted vessel turns local +Y into a different world axis).
      */
     public static Vec3 getWorldSpacePos(BlockEntity be, double localYOffset) {
-        SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(be);
-        if (subLevel == null) return null;
-        BlockPos pos = be.getBlockPos();
-        return subLevel.logicalPose().transformPosition(
-                new Vec3(pos.getX() + 0.5, pos.getY() + localYOffset, pos.getZ() + 0.5));
+        return Delegate.getWorldSpacePos(be, localYOffset);
+    }
+
+    private static final class Delegate {
+        static Vec3 getWorldSpacePos(BlockEntity be, double localYOffset) {
+            dev.ryanhcode.sable.companion.SubLevelAccess subLevel =
+                    dev.ryanhcode.sable.companion.SableCompanion.INSTANCE.getContaining(be);
+            if (subLevel == null) return null;
+            BlockPos pos = be.getBlockPos();
+            return subLevel.logicalPose().transformPosition(
+                    new Vec3(pos.getX() + 0.5, pos.getY() + localYOffset, pos.getZ() + 0.5));
+        }
     }
 
 }

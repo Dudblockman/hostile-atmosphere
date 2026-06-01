@@ -53,21 +53,25 @@ public class AtmosphereEventHandler {
      * Zones per dimension, each list sorted ascending by yCeiling (lowest = most severe first).
      * Rebuilt on datapack reload.
      */
-    private static volatile Map<ResourceLocation, List<ZoneDefinition>> zonesByDim = Map.of();
-    /** Zone IDs per dimension, parallel to {@link #zonesByDim} values. */
-    private static volatile Map<ResourceLocation, List<String>> zoneIdsByDim = Map.of();
+    private record ZoneCache(
+            Map<ResourceLocation, List<ZoneDefinition>> defs,
+            Map<ResourceLocation, List<String>> ids) {
+        static final ZoneCache EMPTY = new ZoneCache(Map.of(), Map.of());
+    }
+    private static volatile ZoneCache zoneCache = ZoneCache.EMPTY;
+    private static volatile Map<ResourceLocation, Integer> leastSevereSecs = Map.of();
 
     /**
      * Tracks last sent zone state per player to avoid redundant packets.
      * int[0] = severity*2 + (approaching?1:0), int[1] = zoneCeilingY, int[2] = zoneFloorY.
      * Ceiling and floor are included so Perlin-noise-driven boundary shifts trigger a resend.
      */
-    private static final Map<UUID, int[]>    lastZoneState      = new HashMap<>();
+    private static final Map<UUID, int[]>    lastZoneState      = new ConcurrentHashMap<>();
     /** Players with ceiling-grid debug particles enabled; value = radius in blocks. */
     private static final Map<UUID, Integer>  particleGridRadii  = new ConcurrentHashMap<>();
 
-    public static Map<ResourceLocation, List<ZoneDefinition>> getCachedZones()  { return zonesByDim; }
-    public static Map<ResourceLocation, List<String>>         getCachedZoneIds() { return zoneIdsByDim; }
+    public static Map<ResourceLocation, List<ZoneDefinition>> getCachedZones()  { return zoneCache.defs(); }
+    public static Map<ResourceLocation, List<String>>         getCachedZoneIds() { return zoneCache.ids(); }
 
     // ------------------------------------------------------------------------------------------
     // Ceiling-grid debug particles
@@ -142,11 +146,11 @@ public class AtmosphereEventHandler {
     // ------------------------------------------------------------------------------------------
 
     private static List<ZoneDefinition> dimZones(ResourceLocation dim) {
-        return zonesByDim.getOrDefault(dim, List.of());
+        return zoneCache.defs().getOrDefault(dim, List.of());
     }
 
     private static List<String> dimIds(ResourceLocation dim) {
-        return zoneIdsByDim.getOrDefault(dim, List.of());
+        return zoneCache.ids().getOrDefault(dim, List.of());
     }
 
     /**
@@ -227,8 +231,12 @@ public class AtmosphereEventHandler {
             newDefs.put(dim, list.stream().map(ZonePair::def).toList());
             newIds.put(dim,  list.stream().map(ZonePair::id).toList());
         });
-        zonesByDim  = Map.copyOf(newDefs);
-        zoneIdsByDim = Map.copyOf(newIds);
+        zoneCache = new ZoneCache(Map.copyOf(newDefs), Map.copyOf(newIds));
+
+        Map<ResourceLocation, Integer> newLeastSevere = new LinkedHashMap<>();
+        byDim.forEach((dim, list) ->
+                newLeastSevere.put(dim, list.stream().mapToInt(p -> p.def().hazardTimeSecs()).max().orElse(1)));
+        leastSevereSecs = Map.copyOf(newLeastSevere);
     }
 
     /** Returns the zone definition for {@code zoneId} in {@code dim}, or null if not found. */
@@ -274,6 +282,7 @@ public class AtmosphereEventHandler {
         int oldToxin = data.getToxinLevel();
 
         var cfg        = AtmosphereConfig.getSettings();
+        if (cfg == null) return;
         var protection = CreateCompat.getProtection(player);
 
         AtmosphereEngine.tick(player, data, cfg, protection, activeZone);
@@ -313,10 +322,8 @@ public class AtmosphereEventHandler {
         if (activeZone != null) {
             int idx = zones.indexOf(activeZone);
             if (idx >= 0) {
-                int leastSevereTimeSecs = zones.stream()
-                        .mapToInt(ZoneDefinition::hazardTimeSecs)
-                        .max()
-                        .orElse(activeZone.hazardTimeSecs());
+                int leastSevereTimeSecs = leastSevereSecs.getOrDefault(
+                        player.level().dimension().location(), activeZone.hazardTimeSecs());
                 hazardIntensity = (float) leastSevereTimeSecs / activeZone.hazardTimeSecs();
 
                 zoneCeilingY = (int) Math.round(
@@ -326,7 +333,7 @@ public class AtmosphereEventHandler {
                     zoneFloorY = (int) Math.round(progression.getEffectiveCeiling(
                             gameTick, px, pz, ids.get(idx - 1), zones.get(idx - 1).evalCeiling(gameTick, px, pz)));
                 } else {
-                    zoneFloorY = zoneCeilingY - 32;
+                    zoneFloorY = Integer.MIN_VALUE;
                 }
             }
         }
@@ -401,7 +408,9 @@ public class AtmosphereEventHandler {
         data.setDrainAccumulator(0f);
         data.setRecoveryAccumulator(0f);
         data.setSuffocationTicks(0);
-        int retainedToxin = Math.min(data.getToxinLevel(), AtmosphereConfig.getSettings().toxinDeathCap());
+        AtmosphereSettings cfg = AtmosphereConfig.getSettings();
+        if (cfg == null) { syncAll(player); return; }
+        int retainedToxin = Math.min(data.getToxinLevel(), cfg.toxinDeathCap());
         data.setToxinLevel(retainedToxin);
         data.setToxinAccumulator(0f);
         data.setToxinRecoveryAccumulator(0f);

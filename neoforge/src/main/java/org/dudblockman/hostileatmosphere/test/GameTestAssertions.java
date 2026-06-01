@@ -9,20 +9,34 @@ final class GameTestAssertions {
     private GameTestAssertions() {}
 
     static void assertEquals(double expected, double actual, GameTestHelper helper) {
-        if (Math.abs(expected - actual) > DELTA)
-            helper.fail(String.format("Expected %.4f but was %.4f", expected, actual));
+        if (Math.abs(expected - actual) > DELTA) {
+            String msg = String.format("Expected %.4f but was %.4f", expected, actual);
+            helper.fail(msg);
+            throw new AssertionError(msg);
+        }
     }
 
     static void assertEquals(String label, int expected, int actual, GameTestHelper helper) {
-        if (expected != actual)
-            helper.fail(label + ": expected " + expected + " but was " + actual);
+        if (expected != actual) {
+            String msg = label + ": expected " + expected + " but was " + actual;
+            helper.fail(msg);
+            throw new AssertionError(msg);
+        }
     }
 
     static void assertNotNull(String msg, Object obj, GameTestHelper helper) {
-        if (obj == null) helper.fail(msg + ": expected non-null but was null");
+        if (obj == null) {
+            String m = msg + ": expected non-null but was null";
+            helper.fail(m);
+            throw new AssertionError(m);
+        }
     }
 
     static void assertNull(String msg, Object obj, GameTestHelper helper) {
-        if (obj != null) helper.fail(msg + ": expected null but was " + obj);
+        if (obj != null) {
+            String m = msg + ": expected null but was " + obj;
+            helper.fail(m);
+            throw new AssertionError(m);
+        }
     }
 }
