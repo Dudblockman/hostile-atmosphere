@@ -71,7 +71,7 @@ public class ToxinAmplifierTests {
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void atMax(GameTestHelper helper) {
-        assertAmplifier(1000, 3, helper);
+        assertAmplifier(Constants.MAX_TOXIN, 3, helper);
         helper.succeed();
     }
 

@@ -1,6 +1,7 @@
 package org.dudblockman.hostileatmosphere.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
+import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.registry.ModAttributes;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
 
@@ -93,23 +94,23 @@ public class AtmosphereConfig {
 
         TOXIN_THRESHOLD_1 = BUILDER
                 .comment("Toxin level at which Atmospheric Toxicity I activates (Weakness). Default: 250.")
-                .defineInRange("toxinThreshold1", 250, 0, 1000);
+                .defineInRange("toxinThreshold1", 250, 0, Constants.MAX_TOXIN);
 
         TOXIN_THRESHOLD_2 = BUILDER
                 .comment("Toxin level at which Atmospheric Toxicity II activates (Weakness + Mining Fatigue). Default: 500.")
-                .defineInRange("toxinThreshold2", 500, 0, 1000);
+                .defineInRange("toxinThreshold2", 500, 0, Constants.MAX_TOXIN);
 
         TOXIN_THRESHOLD_3 = BUILDER
                 .comment("Toxin level at which Atmospheric Toxicity III activates. Default: 750.")
-                .defineInRange("toxinThreshold3", 750, 0, 1000);
+                .defineInRange("toxinThreshold3", 750, 0, Constants.MAX_TOXIN);
 
         TOXIN_THRESHOLD_4 = BUILDER
                 .comment("Toxin level at which Atmospheric Toxicity IV activates. Default: 950.")
-                .defineInRange("toxinThreshold4", 950, 0, 1000);
+                .defineInRange("toxinThreshold4", 950, 0, Constants.MAX_TOXIN);
 
         TOXIN_DEATH_CAP = BUILDER
                 .comment("Toxin level cap applied on death — if current toxin exceeds this, it is reduced to this value; if below, it is unchanged. Range 0–1000. Default: 500.")
-                .defineInRange("toxinDeathCap", 500, 0, 1000);
+                .defineInRange("toxinDeathCap", 500, 0, Constants.MAX_TOXIN);
 
         BUILDER.pop().push("protection");
 

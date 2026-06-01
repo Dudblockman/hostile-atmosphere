@@ -13,7 +13,7 @@ public record AtmosphereModifier(
 ) {
 
     public enum Operation implements StringRepresentable {
-        ADD("add"), CLAMP_MAX("cap"), CLAMP_MIN("floor");
+        ADD("offset"), CLAMP_MAX("cap"), CLAMP_MIN("floor");
 
         private final String name;
 
@@ -23,6 +23,14 @@ public record AtmosphereModifier(
         public String getSerializedName() { return name; }
 
         public static final Codec<Operation> CODEC = StringRepresentable.fromEnum(Operation::values);
+
+        public double apply(double running, double value) {
+            return switch (this) {
+                case ADD       -> running + value;
+                case CLAMP_MAX -> Math.min(running, value);
+                case CLAMP_MIN -> Math.max(running, value);
+            };
+        }
     }
 
     @SuppressWarnings("null")

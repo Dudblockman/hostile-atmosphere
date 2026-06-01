@@ -7,8 +7,10 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.event.entity.EntityAttributeModificationEvent;
+import net.neoforged.neoforge.registries.DataPackRegistryEvent;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
-import org.dudblockman.hostileatmosphere.data.ModAttachments;
+import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
+import org.dudblockman.hostileatmosphere.registry.ModAttachments;
 import org.dudblockman.hostileatmosphere.registry.ModAttributes;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
 import org.dudblockman.hostileatmosphere.registry.ModRegistries;
@@ -24,7 +26,8 @@ public class HostileAtmosphere {
         ModAttributes.ATTRIBUTES.register(modEventBus);
         modEventBus.addListener(HostileAtmosphere::onAttributeModification);
         modEventBus.addListener(HostileAtmosphere::onConfigEvent);
-        modEventBus.addListener(ModRegistries::onNewDataPackRegistry);
+        modEventBus.addListener((DataPackRegistryEvent.NewRegistry event) ->
+                event.dataPackRegistry(ModRegistries.ZONES, ZoneDefinition.CODEC, ZoneDefinition.CODEC));
         modEventBus.addListener(GameTestRegistration::onRegisterGameTests); // test classes must be on main classpath for NeoForge game test scanning
         modContainer.registerConfig(ModConfig.Type.SERVER, AtmosphereConfig.SPEC);
     }

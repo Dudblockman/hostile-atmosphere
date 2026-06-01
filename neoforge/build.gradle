@@ -53,6 +53,24 @@ neoForge {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+// Each game-test class needs its own <classname>.empty_platform.nbt structure file.
+// NeoForge's StructureTemplateManager.loadFromResource uses FileToIdConverter("structure", ".nbt"),
+// so data-pack structures live in data/<ns>/structure/ (singular), not structures/ (plural).
+tasks.register('generateTestStructures') {
+    def structDir = file('src/main/resources/data/hostileatmosphere/structure')
+    def testClasses = [
+        'zonelookuptests', 'modifiercomputationtests',
+        'toxinamplifiertests', 'modifierprogressiontests'
+    ]
+    outputs.files(testClasses.collect { new File(structDir, "${it}.empty_platform.nbt") })
+    doLast {
+        structDir.mkdirs()
+        testClasses.each { cls ->
+            new File(structDir, "${cls}.empty_platform.nbt").bytes = minimalPlatformNbt()
+        }
+    }
+}
+
 tasks.register('syncLocalRuntimeMods', Sync) {
     from configurations.localRuntime
     into layout.projectDirectory.dir('run/mods')
@@ -88,6 +106,53 @@ repositories {
         }
     }
 }
+
+// ------------------------------------------------------------------------------------------
+// NBT helpers for generateTestStructures
+// ------------------------------------------------------------------------------------------
+
+byte[] minimalPlatformNbt() {
+    def baos = new java.io.ByteArrayOutputStream()
+    def gzip = new java.util.zip.GZIPOutputStream(baos)
+    def dos  = new java.io.DataOutputStream(gzip)
+
+    dos.writeByte(10); dos.writeShort(0)  // root TAG_Compound (unnamed)
+
+    // DataVersion: tells DFU no upgrade is needed, avoiding old-format block-id fixers
+    dos.writeByte(3); nbtStr(dos, 'DataVersion'); dos.writeInt(3955)
+
+    // size: TAG_List of TAG_Int = [3, 1, 3]
+    dos.writeByte(9); nbtStr(dos, 'size'); dos.writeByte(3); dos.writeInt(3)
+    dos.writeInt(3); dos.writeInt(1); dos.writeInt(3)
+
+    // palette: TAG_List of TAG_Compound — one entry: {Name:"minecraft:stone"}
+    dos.writeByte(9); nbtStr(dos, 'palette'); dos.writeByte(10); dos.writeInt(1)
+    dos.writeByte(8); nbtStr(dos, 'Name'); nbtStr(dos, 'minecraft:stone')
+    dos.writeByte(0)  // end palette entry
+
+    // blocks: TAG_List of TAG_Compound — 9 blocks for 3×1×3
+    dos.writeByte(9); nbtStr(dos, 'blocks'); dos.writeByte(10); dos.writeInt(9)
+    [[0,0,0],[1,0,0],[2,0,0],[0,0,1],[1,0,1],[2,0,1],[0,0,2],[1,0,2],[2,0,2]].each { p ->
+        dos.writeByte(3);  nbtStr(dos, 'state'); dos.writeInt(0)       // state: Int = 0
+        dos.writeByte(11); nbtStr(dos, 'pos'); dos.writeInt(3)         // pos: Int[]
+        dos.writeInt(p[0]); dos.writeInt(p[1]); dos.writeInt(p[2])
+        dos.writeByte(0)  // end block compound
+    }
+
+    // entities: empty TAG_List
+    dos.writeByte(9); nbtStr(dos, 'entities'); dos.writeByte(0); dos.writeInt(0)
+
+    dos.writeByte(0)  // end root compound
+    dos.flush(); gzip.finish(); gzip.close()
+    baos.toByteArray()
+}
+
+void nbtStr(java.io.DataOutputStream dos, String s) {
+    def b = s.getBytes('UTF-8')
+    dos.writeShort(b.length); dos.write(b)
+}
+
+// ------------------------------------------------------------------------------------------
 
 dependencies {
     localRuntime "mezz.jei:jei-1.21.1-neoforge:${jei_neoforge_version}"

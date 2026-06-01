@@ -11,11 +11,12 @@ import org.dudblockman.hostileatmosphere.progression.ValueSource;
 
 import java.util.List;
 
+import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.assertEquals;
+
 @GameTestHolder(Constants.MOD_ID)
 public class ModifierComputationTests {
 
     private static final String TEMPLATE = "empty_platform";
-    private static final double DELTA = 0.001;
 
     // ------------------------------------------------------------------------------------------
     // Pipeline level computation
@@ -124,7 +125,7 @@ public class ModifierComputationTests {
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void constantInstant(GameTestHelper helper) {
-        var m = new AtmosphereModifier(0, Operation.ADD, new ValueSource.Constant(64.0, 0, 0), "all");
+        var m = new AtmosphereModifier(0, Operation.ADD, new ValueSource.Constant(0.0, 64.0, 0L, 0L), "all");
         assertEquals(64.0, m.getCurrentValue(0), helper);
         assertEquals(64.0, m.getCurrentValue(9999), helper);
         helper.succeed();
@@ -135,17 +136,12 @@ public class ModifierComputationTests {
     // ------------------------------------------------------------------------------------------
 
     private static AtmosphereModifier mod(int key, Operation op, double value) {
-        return new AtmosphereModifier(key, op, new ValueSource.Constant(value, 0, 0), "all");
+        return new AtmosphereModifier(key, op, new ValueSource.Constant(0.0, value, 0L, 0L), "all");
     }
 
     private static AtmosphereModifier rampMod(double value, long tweenTicks, long startTick) {
         return new AtmosphereModifier(0, Operation.ADD,
-                new ValueSource.Constant(value, tweenTicks, startTick), "all");
+                new ValueSource.Constant(0.0, value, tweenTicks, startTick), "all");
     }
 
-    private static void assertEquals(double expected, double actual, GameTestHelper helper) {
-        if (Math.abs(expected - actual) > DELTA) {
-            helper.fail(String.format("Expected %.4f but was %.4f", expected, actual));
-        }
-    }
 }

@@ -6,6 +6,7 @@ public class GameTestRegistration {
 
     public static void onRegisterGameTests(RegisterGameTestsEvent event) {
         event.register(ModifierComputationTests.class);
+        event.register(ModifierProgressionTests.class);
         event.register(ZoneLookupTests.class);
         event.register(ToxinAmplifierTests.class);
     }

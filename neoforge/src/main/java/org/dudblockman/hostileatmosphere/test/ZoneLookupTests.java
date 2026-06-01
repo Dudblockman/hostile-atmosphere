@@ -10,6 +10,8 @@ import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 
 import java.util.List;
 
+import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.*;
+
 /**
  * Tests {@link AtmosphereEngine#findZone} — given a sorted zone list and a player eye Y,
  * verifies the correct zone (or null for safe) is returned.
@@ -150,7 +152,7 @@ public class ZoneLookupTests {
     public static void perZoneOnlyLethalRaised(GameTestHelper helper) {
         // lethal ceiling raised by 32 → effective -16 + 32 = 16; eyeY 10 ≤ 16 → lethal
         var zone = AtmosphereEngine.findZone(ZONES, ZONE_IDS, 0L, 0.0, 10.0, 0.0,
-                id -> "lethal".equals(id) ? 32.0 : 0.0);
+                (id, base) -> "lethal".equals(id) ? base + 32.0 : base);
         assertNotNull("Expected lethal zone with raised ceiling", zone, helper);
         assertEquals("lethal ceiling", -16, (int) zone.evalCeiling(0, 0, 0), helper);
         helper.succeed();
@@ -161,7 +163,7 @@ public class ZoneLookupTests {
         // eyeY -20 is normally in lethal (≤ -16); lethal offset -30 → effective -46;
         // eyeY -20 > -46 so lethal is skipped → hits toxic (-20 ≤ 30)
         var zone = AtmosphereEngine.findZone(ZONES, ZONE_IDS, 0L, 0.0, -20.0, 0.0,
-                id -> "lethal".equals(id) ? -30.0 : 0.0);
+                (id, base) -> "lethal".equals(id) ? base - 30.0 : base);
         assertNotNull("Expected toxic zone when lethal suppressed", zone, helper);
         assertEquals("toxic ceiling", 30, (int) zone.evalCeiling(0, 0, 0), helper);
         helper.succeed();
@@ -170,22 +172,9 @@ public class ZoneLookupTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void perZoneAllSuppressedYieldsSafe(GameTestHelper helper) {
         // all ceilings pushed down by 200; eyeY 10 is above all effective ceilings → safe
-        var zone = AtmosphereEngine.findZone(ZONES, ZONE_IDS, 0L, 0.0, 10.0, 0.0, id -> -200.0);
+        var zone = AtmosphereEngine.findZone(ZONES, ZONE_IDS, 0L, 0.0, 10.0, 0.0, (id, base) -> base - 200.0);
         assertNull("Expected safe zone when all ceilings suppressed", zone, helper);
         helper.succeed();
     }
 
-    // ------------------------------------------------------------------------------------------
-
-    private static void assertNotNull(String msg, Object obj, GameTestHelper helper) {
-        if (obj == null) helper.fail(msg + ": expected non-null but was null");
-    }
-
-    private static void assertNull(String msg, Object obj, GameTestHelper helper) {
-        if (obj != null) helper.fail(msg + ": expected null but was " + obj);
-    }
-
-    private static void assertEquals(String label, int expected, int actual, GameTestHelper helper) {
-        if (expected != actual) helper.fail(label + ": expected " + expected + " but was " + actual);
-    }
 }

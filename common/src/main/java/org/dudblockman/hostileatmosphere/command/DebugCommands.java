@@ -7,6 +7,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.compat.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
@@ -48,7 +49,7 @@ public final class DebugCommands {
                                         .executes(ctx -> setAirDebt(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"),
                                                 IntegerArgumentType.getInteger(ctx, "amount"), dataGetter)))))
                 .then(Commands.literal("settoxin")
-                        .then(Commands.argument("amount", IntegerArgumentType.integer(0, 1000))
+                        .then(Commands.argument("amount", IntegerArgumentType.integer(0, Constants.MAX_TOXIN))
                                 .executes(ctx -> setToxin(ctx.getSource(), ctx.getSource().getPlayerOrException(),
                                         IntegerArgumentType.getInteger(ctx, "amount"), dataGetter, removeEffect))
                                 .then(Commands.argument("player", EntityArgument.player())
@@ -95,12 +96,12 @@ public final class DebugCommands {
 
         AtmosphereEngine.Rates rates = AtmosphereEngine.computeRates(player, data, cfg, protection, activeZone);
         String airRateStr = formatRate(rates.airDebtPerSec(), data.getAirDebt(), maxAir - data.getAirDebt());
-        String toxRateStr = formatRate(rates.toxinPerSec(),   toxin, 1000 - toxin);
+        String toxRateStr = formatRate(rates.toxinPerSec(),   toxin, Constants.MAX_TOXIN - toxin);
 
         src.sendSuccess(() -> Component.literal(String.format(
                 "[HA] %s | eyeY=%.1f | %s | protection=%s\n" +
                 "  airDebt=%d/%d  ceiling=%d  air=%d  suffTicks=%d  graceTicks=%d\n" +
-                "  toxin=%d/1000  effect=%s\n" +
+                "  toxin=%d/" + Constants.MAX_TOXIN + "  effect=%s\n" +
                 "  airDebt: %s | toxin: %s",
                 player.getName().getString(),
                 player.getEyeY(),
@@ -152,7 +153,7 @@ public final class DebugCommands {
                                  Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
                                  Consumer<ServerPlayer> removeEffect) {
         PlayerAtmosphereData data = dataGetter.apply(player);
-        data.setToxinLevel(Math.min(amount, 1000));
+        data.setToxinLevel(Math.min(amount, Constants.MAX_TOXIN));
         // Remove the effect so the engine re-applies with the correct amplifier on the next tick
         removeEffect.accept(player);
         int set = data.getToxinLevel();
@@ -164,7 +165,7 @@ public final class DebugCommands {
     private static int setGrace(CommandSourceStack src, ServerPlayer player, int days,
                                  Function<ServerPlayer, PlayerAtmosphereData> dataGetter) {
         PlayerAtmosphereData data = dataGetter.apply(player);
-        int ticks = days * 24000;
+        int ticks = days * Constants.TICKS_PER_DAY;
         data.setGracePeriodTicks(ticks);
         src.sendSuccess(() -> Component.literal(
                 "[HA] grace=" + days + "d (" + ticks + "t) for " + player.getName().getString()), false);

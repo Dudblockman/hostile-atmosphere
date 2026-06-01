@@ -1,5 +1,7 @@
 package org.dudblockman.hostileatmosphere.command;
 
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import net.minecraft.commands.Commands;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -7,8 +9,8 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.compat.CreateCompat;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
-import org.dudblockman.hostileatmosphere.data.ModAttachments;
-import org.dudblockman.hostileatmosphere.engine.AtmosphereEventHandler;
+import org.dudblockman.hostileatmosphere.events.AtmosphereEventHandler;
+import org.dudblockman.hostileatmosphere.registry.ModAttachments;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
@@ -24,7 +26,22 @@ public final class DebugCommandsHandler {
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
-        ModifierCommand.register(event.getDispatcher());
+        // /atmosphere particles <radius>  — 0 disables, 1-32 enables the ceiling-grid debug visualisation.
+        event.getDispatcher().register(Commands.literal("atmosphere")
+                .requires(src -> src.hasPermission(2))
+                .then(Commands.literal("particles")
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(0, 32))
+                                .executes(ctx -> AtmosphereEventHandler.toggleParticleGrid(ctx.getSource(),
+                                        IntegerArgumentType.getInteger(ctx, "radius"))))));
+
+        ModifierCommand.register(event.getDispatcher(),
+                (ctx, builder) -> {
+                    builder.suggest("all");
+                    AtmosphereEventHandler.getCachedZoneIds().values().forEach(ids -> ids.forEach(builder::suggest));
+                    return builder.buildFuture();
+                },
+                (src, zoneId) -> AtmosphereEventHandler.findZoneByIdForDim(
+                        src.getLevel().dimension().location(), zoneId));
         DebugCommands.register(
                 event.getDispatcher(),
                 player -> player.getData(ModAttachments.ATMOSPHERE_DATA.get()),

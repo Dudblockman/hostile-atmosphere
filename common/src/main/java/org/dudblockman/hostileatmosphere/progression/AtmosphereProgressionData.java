@@ -39,22 +39,34 @@ public class AtmosphereProgressionData extends SavedData {
     }
 
     /**
-     * Per-zone level: evaluates "all" modifiers plus those targeting {@code zoneId},
-     * in ascending key order (pipeline model).
+     * Runs the runtime modifier pipeline for {@code zoneId} starting from {@code baseCeiling}
+     * (the datapack-defined ceiling from {@code ZoneDefinition.evalCeiling}).
+     * ADD offsets the running ceiling; CLAMP_MAX/CLAMP_MIN cap/floor it at absolute y-values.
+     * Returns {@code baseCeiling} unchanged when no runtime modifier matches — the zone stays
+     * active at its datapack-defined ceiling with no adjustments.
+     */
+    public double getEffectiveCeiling(long tick, double x, double z, String zoneId, double baseCeiling) {
+        double effective = baseCeiling;
+        for (var entry : modifiers.entrySet()) {
+            AtmosphereModifier mod = entry.getValue();
+            if (!mod.target().equals("all") && !mod.target().equals(zoneId)) continue;
+            ValueSource settled = mod.source().settle(tick);
+            if (settled != mod.source()) {
+                mod = new AtmosphereModifier(mod.key(), mod.operation(), settled, mod.target());
+                entry.setValue(mod);
+                setDirty();
+            }
+            effective = mod.operation().apply(effective, mod.getCurrentValue(tick, x, z));
+        }
+        return effective;
+    }
+
+    /**
+     * Convenience for unit tests: evaluates the runtime pipeline with baseCeiling=0,
+     * so ADD modifiers report their net offset relative to the datapack floor.
      */
     public double getLevelForZone(long tick, double x, double z, String zoneId) {
-        double level = 0.0;
-        for (AtmosphereModifier mod : modifiers.values()) {
-            String t = mod.target();
-            if (!t.equals("all") && !t.equals(zoneId)) continue;
-            double v = mod.getCurrentValue(tick, x, z);
-            level = switch (mod.operation()) {
-                case ADD       -> level + v;
-                case CLAMP_MAX -> Math.min(level, v);
-                case CLAMP_MIN -> Math.max(level, v);
-            };
-        }
-        return level;
+        return getEffectiveCeiling(tick, x, z, zoneId, 0.0);
     }
 
     /**
@@ -64,26 +76,12 @@ public class AtmosphereProgressionData extends SavedData {
     public static double computeLevel(Iterable<AtmosphereModifier> modifiers, long tick) {
         double level = 0.0;
         for (AtmosphereModifier mod : modifiers) {
-            double v = mod.getCurrentValue(tick);
-            level = switch (mod.operation()) {
-                case ADD       -> level + v;
-                case CLAMP_MAX -> Math.min(level, v);
-                case CLAMP_MIN -> Math.max(level, v);
-            };
+            level = mod.operation().apply(level, mod.getCurrentValue(tick));
         }
         return level;
     }
 
     // ------------------------------------------------------------------------------------------
-
-    /** Adds key 0 as a no-op constant if it has never been set. Called on zone load. */
-    public void ensureKey0() {
-        if (!modifiers.containsKey(0)) {
-            modifiers.put(0, new AtmosphereModifier(0, AtmosphereModifier.Operation.ADD,
-                    new ValueSource.Constant(0, 0, 0), "all"));
-            setDirty();
-        }
-    }
 
     public void setModifier(int key, AtmosphereModifier.Operation op, ValueSource source, String target) {
         modifiers.put(key, new AtmosphereModifier(key, op, source, target));
@@ -99,6 +97,14 @@ public class AtmosphereProgressionData extends SavedData {
             modifiers.clear();
             setDirty();
         }
+    }
+
+    public int clearModifiersForTarget(String target) {
+        int before = modifiers.size();
+        modifiers.values().removeIf(mod -> mod.target().equals(target));
+        int removed = before - modifiers.size();
+        if (removed > 0) setDirty();
+        return removed;
     }
 
     public Map<Integer, AtmosphereModifier> getModifiers() {

@@ -37,12 +37,7 @@ public record ZoneDefinition(
     public double evalCeiling(long tick, double x, double z) {
         double level = 0.0;
         for (CeilingLayer layer : ceiling) {
-            double v = layer.source().get(tick, x, z);
-            level = switch (layer.operation()) {
-                case ADD       -> level + v;
-                case CLAMP_MAX -> Math.min(level, v);
-                case CLAMP_MIN -> Math.max(level, v);
-            };
+            level = layer.operation().apply(level, layer.source().get(tick, x, z));
         }
         return level;
     }
@@ -52,7 +47,7 @@ public record ZoneDefinition(
                                             int hazardTimeSecs, int toxinBuildupSecs) {
         return new ZoneDefinition(dim,
                 List.of(new CeilingLayer(AtmosphereModifier.Operation.ADD,
-                        new ValueSource.Constant(yCeiling, 0, 0))),
+                        new ValueSource.Constant(0.0, yCeiling, 0, 0))),
                 hazardTimeSecs, toxinBuildupSecs);
     }
 

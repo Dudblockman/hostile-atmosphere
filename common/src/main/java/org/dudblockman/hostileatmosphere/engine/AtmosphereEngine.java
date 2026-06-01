@@ -2,8 +2,10 @@ package org.dudblockman.hostileatmosphere.engine;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffect;
@@ -15,24 +17,28 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
+import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.compat.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
-import org.dudblockman.hostileatmosphere.damage.MiasmaDamageTypes;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 
 import java.util.List;
-import java.util.function.Function;
+import java.util.function.BiFunction;
+import java.util.function.IntConsumer;
 
 public class AtmosphereEngine {
 
-    private static final String NS = "hostileatmosphere";
-    private static final ResourceLocation ID_AIR_PROTECTION  = ResourceLocation.fromNamespaceAndPath(NS, "protection_air");
-    private static final ResourceLocation ID_AIR_UNDERWATER  = ResourceLocation.fromNamespaceAndPath(NS, "underwater_air");
-    private static final ResourceLocation ID_AIR_RESPIRATION = ResourceLocation.fromNamespaceAndPath(NS, "respiration_air");
-    private static final ResourceLocation ID_TOXIN_PROTECTION = ResourceLocation.fromNamespaceAndPath(NS, "protection_toxin");
-    private static final ResourceLocation ID_TOXIN_EXPEDITION = ResourceLocation.fromNamespaceAndPath(NS, "expedition_toxin");
-    private static final ResourceLocation ID_TOXIN_UNDERWATER = ResourceLocation.fromNamespaceAndPath(NS, "underwater_toxin");
+    private static final ResourceKey<DamageType> MIASMA =
+            ResourceKey.create(Registries.DAMAGE_TYPE, ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "miasma"));
+    private static final ResourceKey<DamageType> MIASMA_INTENSE =
+            ResourceKey.create(Registries.DAMAGE_TYPE, ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "miasma_intense"));
+    private static final ResourceLocation ID_AIR_PROTECTION  = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"protection_air");
+    private static final ResourceLocation ID_AIR_UNDERWATER  = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"underwater_air");
+    private static final ResourceLocation ID_AIR_RESPIRATION = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"respiration_air");
+    private static final ResourceLocation ID_TOXIN_PROTECTION = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"protection_toxin");
+    private static final ResourceLocation ID_TOXIN_EXPEDITION = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"expedition_toxin");
+    private static final ResourceLocation ID_TOXIN_UNDERWATER = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"underwater_toxin");
 
     /**
      * Returns the most severe zone the player is in using a global atmosphere level offset.
@@ -49,16 +55,20 @@ public class AtmosphereEngine {
     }
 
     /**
-     * Returns the most severe zone, using per-zone level offsets.
-     * {@code zoneIds} is parallel to {@code zones}; {@code levelForZone} maps a zone id → its level offset.
-     * {@code tick}, {@code x}, {@code z} are passed to each zone's ceiling pipeline.
+     * Returns the most severe zone using per-zone effective ceilings.
+     * {@code zoneIds} is parallel to {@code zones}.
+     * {@code effectiveCeiling} receives (zoneId, baseCeiling) and returns the absolute
+     * effective ceiling for that zone; returning {@link Double#NaN} skips the zone entirely,
+     * allowing data packs to disable zones by clearing all their modifiers.
      */
     public static ZoneDefinition findZone(List<ZoneDefinition> zones, List<String> zoneIds,
                                           long tick, double x, double eyeY, double z,
-                                          Function<String, Double> levelForZone) {
+                                          BiFunction<String, Double, Double> effectiveCeiling) {
         for (int i = 0; i < zones.size(); i++) {
-            String id = i < zoneIds.size() ? zoneIds.get(i) : "all";
-            if (eyeY <= zones.get(i).evalCeiling(tick, x, z) + levelForZone.apply(id)) return zones.get(i);
+            double base = zones.get(i).evalCeiling(tick, x, z);
+            String id   = i < zoneIds.size() ? zoneIds.get(i) : "all";
+            double ceil = effectiveCeiling.apply(id, base);
+            if (!Double.isNaN(ceil) && eyeY <= ceil) return zones.get(i);
         }
         return null;
     }
@@ -67,7 +77,7 @@ public class AtmosphereEngine {
     public static void tick(ServerPlayer player, PlayerAtmosphereData data, AtmosphereSettings cfg,
                             ProtectionLevel protection, ZoneDefinition activeZone) {
         if (data.needsInit()) {
-            data.setGracePeriodTicks(cfg.gracePeriodDays() * 24000);
+            data.setGracePeriodTicks(cfg.gracePeriodDays() * Constants.TICKS_PER_DAY);
         }
 
         if (data.getGracePeriodTicks() > 0) {
@@ -108,7 +118,6 @@ public class AtmosphereEngine {
             player.setAirSupply(ceiling);
         }
 
-        // Miasma damage only fires when the player has zero air AND no protection.
         if (data.getAirDebt() >= maxAir && !fullyProtected) {
             data.setSuffocationTicks(data.getSuffocationTicks() + 1);
             applyMiasmaDamage(player, data, cfg);
@@ -219,27 +228,27 @@ public class AtmosphereEngine {
     // Air debt helpers
     // ==========================================================================================
 
-    private static void accumulateDrain(PlayerAtmosphereData data, int maxAir,
-                                         ZoneDefinition zone, float rateMult) {
-        float drainPerTick = ((float) maxAir / (zone.hazardTimeSecs() * 20f)) * rateMult;
-        float acc = data.getDrainAccumulator() + drainPerTick;
+    private static float accumulate(float acc, float ratePerTick, IntConsumer applyUnits) {
+        acc += ratePerTick;
         int units = (int) acc;
         if (units > 0) {
-            data.setAirDebt(Math.min(data.getAirDebt() + units, maxAir));
+            applyUnits.accept(units);
             acc -= units;
         }
-        data.setDrainAccumulator(acc);
+        return acc;
+    }
+
+    private static void accumulateDrain(PlayerAtmosphereData data, int maxAir,
+                                         ZoneDefinition zone, float rateMult) {
+        float rate = ((float) maxAir / (zone.hazardTimeSecs() * 20f)) * rateMult;
+        data.setDrainAccumulator(accumulate(data.getDrainAccumulator(), rate,
+                u -> data.setAirDebt(Math.min(data.getAirDebt() + u, maxAir))));
     }
 
     private static void accumulateRecovery(PlayerAtmosphereData data, int maxAir, AtmosphereSettings cfg) {
-        float recoveryPerTick = (float) maxAir / (cfg.safeZoneRecoverySecs() * 20f);
-        float acc = data.getRecoveryAccumulator() + recoveryPerTick;
-        int units = (int) acc;
-        if (units > 0) {
-            data.setAirDebt(Math.max(data.getAirDebt() - units, 0));
-            acc -= units;
-        }
-        data.setRecoveryAccumulator(acc);
+        float rate = (float) maxAir / (cfg.safeZoneRecoverySecs() * 20f);
+        data.setRecoveryAccumulator(accumulate(data.getRecoveryAccumulator(), rate,
+                u -> data.setAirDebt(Math.max(data.getAirDebt() - u, 0))));
     }
 
     private static void applyMiasmaDamage(ServerPlayer player, PlayerAtmosphereData data, AtmosphereSettings cfg) {
@@ -262,7 +271,7 @@ public class AtmosphereEngine {
         }
 
         if (player.tickCount % interval == 0) {
-            var key = (suff >= tier3) ? MiasmaDamageTypes.MIASMA_INTENSE : MiasmaDamageTypes.MIASMA;
+            var key = (suff >= tier3) ? MIASMA_INTENSE : MIASMA;
             DamageSource miasma = new DamageSource(
                     player.level().registryAccess()
                             .registryOrThrow(Registries.DAMAGE_TYPE)
@@ -290,26 +299,16 @@ public class AtmosphereEngine {
     // ==========================================================================================
 
     private static void accumulateToxin(PlayerAtmosphereData data, ZoneDefinition zone, float rateMult) {
-        float buildupPerTick = (1000f / (zone.toxinBuildupSecs() * 20f)) * rateMult;
-        float acc = data.getToxinAccumulator() + buildupPerTick;
-        int units = (int) acc;
-        if (units > 0) {
-            data.setToxinLevel(Math.min(data.getToxinLevel() + units, 1000));
-            acc -= units;
-        }
-        data.setToxinAccumulator(acc);
+        float rate = (Constants.MAX_TOXIN / (zone.toxinBuildupSecs() * 20f)) * rateMult;
+        data.setToxinAccumulator(accumulate(data.getToxinAccumulator(), rate,
+                u -> data.setToxinLevel(Math.min(data.getToxinLevel() + u, Constants.MAX_TOXIN))));
     }
 
     private static void recoverToxin(PlayerAtmosphereData data, AtmosphereSettings cfg) {
         if (data.getToxinLevel() == 0) return;
-        float recoveryPerTick = 1000f / (cfg.toxinRecoverySecs() * 20f);
-        float acc = data.getToxinRecoveryAccumulator() + recoveryPerTick;
-        int units = (int) acc;
-        if (units > 0) {
-            data.setToxinLevel(Math.max(data.getToxinLevel() - units, 0));
-            acc -= units;
-        }
-        data.setToxinRecoveryAccumulator(acc);
+        float rate = Constants.MAX_TOXIN / (cfg.toxinRecoverySecs() * 20f);
+        data.setToxinRecoveryAccumulator(accumulate(data.getToxinRecoveryAccumulator(), rate,
+                u -> data.setToxinLevel(Math.max(data.getToxinLevel() - u, 0))));
     }
 
     /** Current per-second rates of change for air debt and toxin level. */
@@ -339,9 +338,9 @@ public class AtmosphereEngine {
 
         float toxinPerSec;
         if (activeZone != null && toxinMult > 0) {
-            toxinPerSec = (1000f / activeZone.toxinBuildupSecs()) * toxinMult;
+            toxinPerSec = (Constants.MAX_TOXIN / activeZone.toxinBuildupSecs()) * toxinMult;
         } else if (activeZone == null && data.getToxinLevel() > 0) {
-            toxinPerSec = -(1000f / cfg.toxinRecoverySecs());
+            toxinPerSec = -(Constants.MAX_TOXIN / cfg.toxinRecoverySecs());
         } else {
             toxinPerSec = 0f;
         }

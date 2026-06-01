@@ -14,7 +14,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerHeartTypeEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.compat.CreateCompat;
-import org.dudblockman.hostileatmosphere.data.AtmosphereClientData;
+import org.dudblockman.hostileatmosphere.client.AtmosphereClientData;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
 
 /**

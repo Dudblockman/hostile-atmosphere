@@ -21,10 +21,20 @@ public final class SableCompat {
      * Only call this when {@link #isLoaded()} is true.
      */
     public static Vec3 getWorldSpacePos(BlockEntity be) {
+        return getWorldSpacePos(be, 0.0);
+    }
+
+    /**
+     * Like {@link #getWorldSpacePos(BlockEntity)} but offsets the local Y coordinate by
+     * {@code localYOffset} before transforming, so the result correctly accounts for the
+     * sub-level's orientation (e.g. a tilted vessel turns local +Y into a different world axis).
+     */
+    public static Vec3 getWorldSpacePos(BlockEntity be, double localYOffset) {
         SubLevelAccess subLevel = SableCompanion.INSTANCE.getContaining(be);
         if (subLevel == null) return null;
         BlockPos pos = be.getBlockPos();
         return subLevel.logicalPose().transformPosition(
-                new Vec3(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5));
+                new Vec3(pos.getX() + 0.5, pos.getY() + localYOffset, pos.getZ() + 0.5));
     }
+
 }

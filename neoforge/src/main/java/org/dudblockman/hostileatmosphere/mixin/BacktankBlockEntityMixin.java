@@ -1,15 +1,19 @@
 package org.dudblockman.hostileatmosphere.mixin;
 
 import com.simibubi.create.content.equipment.armor.BacktankBlockEntity;
+import com.simibubi.create.content.equipment.armor.BacktankUtil;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import org.dudblockman.hostileatmosphere.compat.SableCompat;
-import org.dudblockman.hostileatmosphere.engine.AtmosphereEventHandler;
+import org.dudblockman.hostileatmosphere.events.AtmosphereEventHandler;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -30,6 +34,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Pseudo
 @Mixin(value = BacktankBlockEntity.class, remap = false)
 public class BacktankBlockEntityMixin {
+
+    @Shadow public int airLevel;
+    @Shadow private int capacityEnchantLevel;
 
     @Inject(
         method = "tick",
@@ -57,6 +64,19 @@ public class BacktankBlockEntityMixin {
         }
 
         if (AtmosphereEventHandler.findZoneAt(level, wx, wy, wz) != null) {
+            boolean full = airLevel >= BacktankUtil.maxAir(capacityEnchantLevel);
+            if (!full && !level.isClientSide() && level.getRandom().nextInt(50) == 0) {
+                // Particle near the local +Y top of the block. On a tilted Sable sub-level the
+                // local Y offset must be transformed through the pose before being emitted.
+                double px, py, pz;
+                if (worldPos != null) {
+                    Vec3 pp = SableCompat.getWorldSpacePos(be, 0.8);
+                    px = pp.x; py = pp.y; pz = pp.z;
+                } else {
+                    px = wx + 0.5; py = wy + 0.8; pz = wz + 0.5;
+                }
+                ((ServerLevel) level).sendParticles(ParticleTypes.CRIT, px, py, pz, 4, 0.2, 0.05, 0.2, 0.1);
+            }
             ci.cancel();
         }
     }
