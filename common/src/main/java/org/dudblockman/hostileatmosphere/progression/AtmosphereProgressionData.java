@@ -9,6 +9,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.dudblockman.hostileatmosphere.Constants;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -21,7 +23,7 @@ public class AtmosphereProgressionData extends SavedData {
     /** Integer key → modifier, evaluated in ascending key order. Key 0 = data pack base. */
     private final TreeMap<Integer, AtmosphereModifier> modifiers = new TreeMap<>();
 
-    private AtmosphereProgressionData() {}
+    public AtmosphereProgressionData() {}
 
     public static AtmosphereProgressionData get(MinecraftServer server) {
         return server.overworld().getDataStorage().computeIfAbsent(FACTORY, DATA_NAME);
@@ -46,16 +48,23 @@ public class AtmosphereProgressionData extends SavedData {
      */
     public double getEffectiveCeiling(long tick, double x, double z, String zoneId, double baseCeiling) {
         double effective = baseCeiling;
+        List<Map.Entry<Integer, AtmosphereModifier>> toSettle = new ArrayList<>();
+        List<AtmosphereModifier> settled = new ArrayList<>();
         for (var entry : modifiers.entrySet()) {
             AtmosphereModifier mod = entry.getValue();
             if (!mod.target().equals("all") && !mod.target().equals(zoneId)) continue;
-            ValueSource settled = mod.source().settle(tick);
-            if (settled != mod.source()) {
-                mod = new AtmosphereModifier(mod.key(), mod.operation(), settled, mod.target());
-                entry.setValue(mod);
-                setDirty();
+            ValueSource settledSource = mod.source().settle(tick);
+            if (settledSource != mod.source()) {
+                AtmosphereModifier newMod = new AtmosphereModifier(mod.key(), mod.operation(), settledSource, mod.target());
+                toSettle.add(entry);
+                settled.add(newMod);
+                mod = newMod;
             }
             effective = mod.operation().apply(effective, mod.getCurrentValue(tick, x, z));
+        }
+        if (!toSettle.isEmpty()) {
+            for (int i = 0; i < toSettle.size(); i++) toSettle.get(i).setValue(settled.get(i));
+            setDirty();
         }
         return effective;
     }

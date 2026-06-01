@@ -7,6 +7,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.synth.ImprovedNoise;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -119,7 +120,12 @@ public interface ValueSource {
             long seed
     ) implements ValueSource {
 
-        private static final Map<Long, ImprovedNoise> NOISE_CACHE = new ConcurrentHashMap<>();
+        private static final Map<Long, ImprovedNoise> NOISE_CACHE = Collections.synchronizedMap(
+                new java.util.LinkedHashMap<Long, ImprovedNoise>(32, 0.75f, true) {
+                    @Override protected boolean removeEldestEntry(java.util.Map.Entry<Long, ImprovedNoise> eldest) {
+                        return size() > 32;
+                    }
+                });
 
         @Override public String type() { return "perlin"; }
 
@@ -130,7 +136,8 @@ public interface ValueSource {
             double t   = tweenTicks <= 0 ? 1.0
                     : Mth.clamp((double) (tick - startTick) / tweenTicks, 0.0, 1.0);
             double amp = fromAmplitude + (amplitude - fromAmplitude) * t;
-            return amp * noise().noise(x * xzScale, tick / timeTicks, z * xzScale);
+            double raw = amp * noise().noise(x * xzScale, (double) tick / timeTicks, z * xzScale);
+            return Mth.clamp(raw, -Math.abs(amp), Math.abs(amp));
         }
 
         @Override

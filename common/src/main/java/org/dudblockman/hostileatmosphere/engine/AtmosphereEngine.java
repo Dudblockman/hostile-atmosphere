@@ -98,9 +98,12 @@ public class AtmosphereEngine {
         // ----- Air debt -----------------------------------------------------------------------
 
         boolean doAirDrain    = activeZone != null && airMult > 0;
-        // SEALED supplies clean air → recovers even in a hazard zone.
-        // RESPIRATOR pauses drain; debt stays frozen until the player leaves.
-        boolean doAirRecovery = activeZone == null || protection == ProtectionLevel.SEALED;
+        // Both SEALED and RESPIRATOR recover debt while in-zone; the backtank pays the cost
+        // (see AtmosphereEventHandler.onPlayerTick — retroactive drain). Outside the zone,
+        // recovery is free (passive safe-air breathing).
+        boolean doAirRecovery = activeZone == null
+                || protection == ProtectionLevel.SEALED
+                || protection == ProtectionLevel.RESPIRATOR;
 
         if (doAirDrain) {
             accumulateDrain(data, maxAir, activeZone, airMult);
@@ -133,11 +136,8 @@ public class AtmosphereEngine {
         } else if (activeZone == null) {
             recoverToxin(data, cfg);
             data.setToxinAccumulator(0f);
-        } else {
-            // In hazard zone, toxinMult == 0 (IMMUNE) — suspended, neither builds nor drains.
-            data.setToxinAccumulator(0f);
-            data.setToxinRecoveryAccumulator(0f);
         }
+        // activeZone != null && toxinMult == 0 (IMMUNE): leave accumulators unchanged.
 
         int targetAmp = getToxinAmplifier(data.getToxinLevel(), cfg);
         applyToxicityEffect(player, targetAmp, cfg.toxicityEffect());

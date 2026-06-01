@@ -28,7 +28,12 @@ public final class CreateCompat {
 
     public static void drainBacktank(ServerPlayer player) {
         if (!LOADED) return;
-        Delegate.drainBacktank(player);
+        Delegate.drainBacktank(player, 1);
+    }
+
+    public static void drainBacktank(ServerPlayer player, int amount) {
+        if (!LOADED || amount <= 0) return;
+        Delegate.drainBacktank(player, amount);
     }
 
     /**
@@ -73,10 +78,10 @@ public final class CreateCompat {
             return ProtectionLevel.NONE;
         }
 
-        static void drainBacktank(ServerPlayer player) {
+        static void drainBacktank(ServerPlayer player, int amount) {
             var chest = player.getItemBySlot(EquipmentSlot.CHEST);
             if (!BacktankUtil.hasAirRemaining(chest)) return;
-            BacktankUtil.consumeAir(player, chest, 1);
+            BacktankUtil.consumeAir(player, chest, amount);
         }
 
         static void updateVisualAir(LivingEntity entity) {

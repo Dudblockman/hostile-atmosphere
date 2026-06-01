@@ -59,8 +59,8 @@ public record ZoneDefinition(
                                     ResourceLocation.fromNamespaceAndPath("minecraft", "overworld"))
                             .forGetter(ZoneDefinition::dimension),
                     CeilingLayer.CODEC.listOf().fieldOf("ceiling").forGetter(ZoneDefinition::ceiling),
-                    Codec.INT.fieldOf("hazardTimeSecs").forGetter(ZoneDefinition::hazardTimeSecs),
-                    Codec.INT.fieldOf("toxinBuildupSecs").forGetter(ZoneDefinition::toxinBuildupSecs)
+                    Codec.intRange(1, 72000).fieldOf("hazardTimeSecs").forGetter(ZoneDefinition::hazardTimeSecs),
+                    Codec.intRange(1, 72000).fieldOf("toxinBuildupSecs").forGetter(ZoneDefinition::toxinBuildupSecs)
             ).apply(instance, ZoneDefinition::new)
     );
 }

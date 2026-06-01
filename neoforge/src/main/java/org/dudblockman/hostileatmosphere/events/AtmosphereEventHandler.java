@@ -66,9 +66,12 @@ public class AtmosphereEventHandler {
      * int[0] = severity*2 + (approaching?1:0), int[1] = zoneCeilingY, int[2] = zoneFloorY.
      * Ceiling and floor are included so Perlin-noise-driven boundary shifts trigger a resend.
      */
-    private static final Map<UUID, int[]>    lastZoneState      = new ConcurrentHashMap<>();
+    private static final Map<UUID, int[]>     lastZoneState      = new ConcurrentHashMap<>();
+    private static final Map<UUID, Boolean>   lastDivingState    = new ConcurrentHashMap<>();
+    /** Fractional backtank units owed from retroactive debt-recovery drain, pending consumption. */
+    private static final Map<UUID, Float>     backtankDebtDrain  = new ConcurrentHashMap<>();
     /** Players with ceiling-grid debug particles enabled; value = radius in blocks. */
-    private static final Map<UUID, Integer>  particleGridRadii  = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer>   particleGridRadii  = new ConcurrentHashMap<>();
 
     public static Map<ResourceLocation, List<ZoneDefinition>> getCachedZones()  { return zoneCache.defs(); }
     public static Map<ResourceLocation, List<String>>         getCachedZoneIds() { return zoneCache.ids(); }
@@ -278,6 +281,7 @@ public class AtmosphereEventHandler {
         }
 
         PlayerAtmosphereData data = player.getData(ModAttachments.ATMOSPHERE_DATA.get());
+        int maxAir   = player.getMaxAirSupply();
         int oldDebt  = data.getAirDebt();
         int oldToxin = data.getToxinLevel();
 
@@ -290,13 +294,28 @@ public class AtmosphereEventHandler {
         boolean divingActive = (protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR)
                 && activeZone != null;
 
-        if (divingActive != data.isDivingActive()) {
-            data.setDivingActive(divingActive);
+        if (divingActive != lastDivingState.getOrDefault(player.getUUID(), false)) {
+            lastDivingState.put(player.getUUID(), divingActive);
             PacketDistributor.sendToPlayer(player, new SyncDivingActivePayload(divingActive));
         }
 
-        if (divingActive && player.getEyeInFluidType().isAir() && player.tickCount % 20 == 0) {
-            CreateCompat.drainBacktank(player);
+        if (divingActive) {
+            // Retroactive debt compensation: when the suit recovers in-zone debt, drain the
+            // backtank proportional to the zone's hazard time. Full debt recovery costs
+            // hazardTimeSecs seconds of backtank air — i.e. equipping gear cannot recover
+            // debt for free; it costs the same tank time it would have taken to incur it.
+            int debtRecovered = oldDebt - data.getAirDebt();
+            if (debtRecovered > 0 && activeZone != null && maxAir > 0) {
+                float drain = (float) debtRecovered / maxAir * activeZone.hazardTimeSecs();
+                float acc = backtankDebtDrain.getOrDefault(player.getUUID(), 0f) + drain;
+                int whole = (int) acc;
+                backtankDebtDrain.put(player.getUUID(), acc - whole);
+                if (whole > 0) CreateCompat.drainBacktank(player, whole);
+            }
+            // Baseline drain: 1 unit/second for maintaining the seal while in the zone.
+            if (player.getEyeInFluidType().isAir() && player.tickCount % 20 == 0) {
+                CreateCompat.drainBacktank(player);
+            }
         }
 
         int newDebt  = data.getAirDebt();
@@ -342,15 +361,22 @@ public class AtmosphereEventHandler {
         boolean approaching = false;
         if (hazardIntensity == 0.0f) {
             double eyeY = player.getEyeY();
+            double bestGap = Double.MAX_VALUE;
+            double bestCeiling = Double.NaN;
             for (int i = 0; i < zones.size(); i++) {
                 double effectiveCeiling = progression.getEffectiveCeiling(
                         gameTick, px, pz, ids.get(i), zones.get(i).evalCeiling(gameTick, px, pz));
-                if (!Double.isNaN(effectiveCeiling) && eyeY > effectiveCeiling && eyeY - effectiveCeiling <= 15.0) {
-                    approaching = true;
-                    zoneCeilingY = (int) Math.round(effectiveCeiling);
-                    zoneFloorY   = zoneCeilingY;
-                    break;
+                if (Double.isNaN(effectiveCeiling)) continue;
+                double gap = eyeY - effectiveCeiling;
+                if (gap > 0 && gap <= 15.0 && gap < bestGap) {
+                    bestGap = gap;
+                    bestCeiling = effectiveCeiling;
                 }
+            }
+            if (!Double.isNaN(bestCeiling)) {
+                approaching = true;
+                zoneCeilingY = (int) Math.round(bestCeiling);
+                zoneFloorY   = zoneCeilingY;
             }
         }
 
@@ -371,6 +397,8 @@ public class AtmosphereEventHandler {
     public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         UUID id = event.getEntity().getUUID();
         lastZoneState.remove(id);
+        lastDivingState.remove(id);
+        backtankDebtDrain.remove(id);
         particleGridRadii.remove(id);
     }
 

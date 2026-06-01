@@ -4,6 +4,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeMap;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import org.dudblockman.hostileatmosphere.Constants;
@@ -15,16 +16,26 @@ public class AtmosphericToxicityEffect extends MobEffect {
 
     public AtmosphericToxicityEffect() {
         super(MobEffectCategory.HARMFUL, 0x3D6B2E);
-        addAttributeModifier(Attributes.ATTACK_DAMAGE, WEAKNESS_ID, -2.0, AttributeModifier.Operation.ADD_VALUE);
+    }
+
+    @Override
+    public void addAttributeModifiers(AttributeMap attributeMap, int amplifier) {
+        var inst = attributeMap.getInstance(Attributes.ATTACK_DAMAGE);
+        if (inst != null) {
+            inst.removeModifier(WEAKNESS_ID);
+            inst.addTransientModifier(new AttributeModifier(WEAKNESS_ID, -2.0 * (amplifier + 1), AttributeModifier.Operation.ADD_VALUE));
+        }
+    }
+
+    @Override
+    public void removeAttributeModifiers(AttributeMap attributeMap) {
+        var inst = attributeMap.getInstance(Attributes.ATTACK_DAMAGE);
+        if (inst != null) inst.removeModifier(WEAKNESS_ID);
     }
 
     @Override
     public boolean shouldApplyEffectTickThisTick(int duration, int amplifier) {
-        if (amplifier >= 2) {
-            int interval = (amplifier >= 3) ? 20 : 25;
-            return (duration % interval) == 0;
-        }
-        return false;
+        return super.shouldApplyEffectTickThisTick(duration, amplifier);
     }
 
     @Override
