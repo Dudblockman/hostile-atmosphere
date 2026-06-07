@@ -132,6 +132,120 @@ public class ModifierComputationTests {
     }
 
     // ------------------------------------------------------------------------------------------
+    // Constant.settle()
+    // ------------------------------------------------------------------------------------------
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void constantSettlesAfterTweenComplete(GameTestHelper helper) {
+        var m = rampMod(64.0, 100L, 0L);
+        var settled = m.source().settle(100);
+        assertEquals("settled tweenTicks", 0, (int) ((ValueSource.Constant) settled).tweenTicks(), helper);
+        assertEquals("settled value", 64.0, settled.get(0), helper);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void constantDoesNotSettleBeforeTweenComplete(GameTestHelper helper) {
+        var m = rampMod(64.0, 100L, 0L);
+        var notYet = m.source().settle(50);
+        // settle() returns this before tween completes — still has tweenTicks=100
+        assertEquals("unsettled tweenTicks", 100, (int) ((ValueSource.Constant) notYet).tweenTicks(), helper);
+        helper.succeed();
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // SinWave value source
+    // ------------------------------------------------------------------------------------------
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void sinWaveAtZero(GameTestHelper helper) {
+        // amplitude=10, period=20, phase=0 → get(0) = 10*sin(0) = 0
+        var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 0.0, 0L, 0L);
+        assertEquals(0.0, src.get(0), helper);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void sinWaveAtQuarterPeriod(GameTestHelper helper) {
+        // get(5) = 10*sin(2π*5/20) = 10*sin(π/2) = 10.0
+        var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 0.0, 0L, 0L);
+        assertEquals(10.0, src.get(5), helper);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void sinWaveAtHalfPeriod(GameTestHelper helper) {
+        // get(10) = 10*sin(π) ≈ 0 (within floating-point tolerance)
+        var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 0.0, 0L, 0L);
+        assertEquals(0.0, src.get(10), helper);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void sinWaveAtThreeQuarterPeriod(GameTestHelper helper) {
+        // get(15) = 10*sin(3π/2) = -10.0
+        var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 0.0, 0L, 0L);
+        assertEquals(-10.0, src.get(15), helper);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void sinWavePhaseShiftsMidpoint(GameTestHelper helper) {
+        // phase=5: zero crosses at tick=5; peak at tick=10 (quarter period after zero)
+        // get(5) = 10*sin(2π*(5-5)/20) = 0; get(10) = 10*sin(2π*5/20) = 10
+        var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 5.0, 0L, 0L);
+        assertEquals("at phase offset", 0.0, src.get(5), helper);
+        assertEquals("quarter period after phase offset", 10.0, src.get(10), helper);
+        helper.succeed();
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Perlin noise value source
+    // ------------------------------------------------------------------------------------------
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void perlinSameSeedSameOutput(GameTestHelper helper) {
+        // Two independent instances with same seed must produce identical output.
+        var a = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L);
+        var b = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L);
+        assertEquals(a.get(37L, 123.4, 56.7), b.get(37L, 123.4, 56.7), helper);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void perlinOutputWithinAmplitudeBounds(GameTestHelper helper) {
+        var src = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L);
+        for (int i = 0; i < 20; i++) {
+            double v = src.get(i * 13L, i * 7.3, i * 11.9);
+            if (v < -5.001 || v > 5.001) {
+                String msg = "Perlin output " + v + " outside amplitude [-5,5] at i=" + i;
+                helper.fail(msg);
+                throw new AssertionError(msg);
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void perlinDifferentSeedsProduceDifferentOutput(GameTestHelper helper) {
+        var s1 = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L);
+        var s2 = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 99L);
+        boolean anyDifferent = false;
+        for (int i = 1; i <= 10; i++) {
+            if (Math.abs(s1.get(i * 7L, i * 3.7, i * 5.1) - s2.get(i * 7L, i * 3.7, i * 5.1)) > 0.001) {
+                anyDifferent = true;
+                break;
+            }
+        }
+        if (!anyDifferent) {
+            String msg = "Seeds 42 and 99 produced identical output at all 10 sample positions";
+            helper.fail(msg);
+            throw new AssertionError(msg);
+        }
+        helper.succeed();
+    }
+
+    // ------------------------------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------------------------------
 

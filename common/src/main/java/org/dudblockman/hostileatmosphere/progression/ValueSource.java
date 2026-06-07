@@ -3,13 +3,14 @@ package org.dudblockman.hostileatmosphere.progression;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.synth.ImprovedNoise;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Computes a scalar value from the current game tick and optional world position.
@@ -28,14 +29,23 @@ public interface ValueSource {
     /** Returns a settled copy with tweenTicks=0 once the tween is complete, or {@code this} if still in progress. */
     default ValueSource settle(long tick) { return this; }
 
-    @SuppressWarnings({"null", "unchecked"})
-    Map<String, MapCodec<? extends ValueSource>> BY_TYPE = Map.of(
-            "constant", Constant.CODEC,
-            "sin",      SinWave.CODEC,
-            "perlin",   Perlin.CODEC
-    );
+    /**
+     * Called once per server tick to update any server-side state.
+     * Returns {@code true} if persistent state changed this tick (signals the caller to
+     * mark the containing SavedData dirty). The default is a no-op returning {@code false}.
+     */
+    default boolean serverTick(ServerLevel level, long tick) { return false; }
 
-    Codec<ValueSource> CODEC = Codec.STRING.dispatch("type", ValueSource::type, BY_TYPE::get);
+    @SuppressWarnings("null")
+    Codec<ValueSource> CODEC = Codec.STRING.dispatch("type", ValueSource::type, type -> ValueSource.BY_TYPE.get(type));
+
+    @SuppressWarnings({"null", "unchecked"})
+    Map<String, MapCodec<? extends ValueSource>> BY_TYPE = Map.ofEntries(
+            Map.entry("constant",  Constant.CODEC),
+            Map.entry("sin",       SinWave.CODEC),
+            Map.entry("perlin",    Perlin.CODEC),
+            Map.entry("predicate", PredicateSource.CODEC)
+    );
 
     // ------------------------------------------------------------------------------------------
 

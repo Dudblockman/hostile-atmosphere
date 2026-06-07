@@ -24,6 +24,7 @@ public class ToxinAmplifierTests {
     private static final AtmosphereSettings CFG = new AtmosphereSettings(
             30, 3, 10, 30, 1f, 2f, 4f, 1f, 0.75f, 0.5f,
             14400, 250, 500, 750, 950, 500,
+            false, 1.5f,
             0.6f, 0.6f, false, 0f, 0f, 0.5f,
             null, null, null);
 
@@ -80,8 +81,9 @@ public class ToxinAmplifierTests {
     private static void assertAmplifier(int toxin, int expectedAmp, GameTestHelper helper) {
         int actual = AtmosphereEngine.getToxinAmplifier(toxin, CFG);
         if (actual != expectedAmp) {
-            helper.fail(String.format(
-                    "getToxinAmplifier(%d): expected amp %d but was %d", toxin, expectedAmp, actual));
+            String msg = String.format("getToxinAmplifier(%d): expected amp %d but was %d", toxin, expectedAmp, actual);
+            helper.fail(msg);
+            throw new AssertionError(msg);
         }
     }
 }

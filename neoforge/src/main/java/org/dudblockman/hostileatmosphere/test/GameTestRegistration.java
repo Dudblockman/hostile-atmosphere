@@ -9,5 +9,6 @@ public class GameTestRegistration {
         event.register(ModifierProgressionTests.class);
         event.register(ZoneLookupTests.class);
         event.register(ToxinAmplifierTests.class);
+        event.register(PredicateSourceTests.class);
     }
 }

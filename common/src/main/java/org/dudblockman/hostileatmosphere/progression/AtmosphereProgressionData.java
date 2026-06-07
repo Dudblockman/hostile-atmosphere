@@ -6,6 +6,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.dudblockman.hostileatmosphere.Constants;
 
@@ -90,6 +91,29 @@ public class AtmosphereProgressionData extends SavedData {
     }
 
     // ------------------------------------------------------------------------------------------
+
+    /**
+     * Calls {@link ValueSource#serverTick} on every modifier source.
+     * Invoke once per server tick so that {@link PredicateSource} instances
+     * can evaluate their datapack predicates and update their multiplier tweens.
+     *
+     * <p>Notes:
+     * <ul>
+     *   <li>The passed {@code level} is used as predicate context for all
+     *       {@link PredicateSource} modifiers regardless of zone dimension;
+     *       a {@code weather_check} predicate on a Nether zone will evaluate against
+     *       whichever level is passed here (currently always the overworld).</li>
+     *   <li>{@link PredicateSource} multiplier and toMultiplier are persisted in the codec;
+     *       tween position is restored correctly across server restarts.</li>
+     * </ul>
+     */
+    public void serverTick(ServerLevel level, long tick) {
+        boolean dirty = false;
+        for (AtmosphereModifier mod : modifiers.values()) {
+            dirty |= mod.source().serverTick(level, tick);
+        }
+        if (dirty) setDirty();
+    }
 
     public void setModifier(int key, AtmosphereModifier.Operation op, ValueSource source, String target) {
         modifiers.put(key, new AtmosphereModifier(key, op, source, target));

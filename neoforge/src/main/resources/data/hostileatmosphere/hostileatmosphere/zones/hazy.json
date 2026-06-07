@@ -1,7 +1,8 @@
 {
   "dimension": "minecraft:overworld",
   "ceiling": [
-    {"operation": "offset", "source": {"type": "constant", "value": 66}}
+    {"operation": "offset", "source": {"type": "constant", "value": 66}},
+    {"operation": "offset", "source": {"type": "predicate", "predicate": "hostileatmosphere:is_raining", "tweenTicks": 600, "if": [{"operation": "offset", "source": {"type": "constant", "value": -16}}]}}
   ],
   "hazardTimeSecs": 480,
   "toxinBuildupSecs": 2400

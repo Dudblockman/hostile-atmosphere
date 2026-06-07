@@ -22,3 +22,8 @@ build
 eclipse
 run
 runs
+
+# IDE artifacts
+.vscode/
+.eclipse/
+neoforge/.eclipse/

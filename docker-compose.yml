@@ -1,0 +1,22 @@
+services:
+  runner:
+    image:  eclipse-temurin:21-jdk-jammy
+    profiles:
+      - runner
+    volumes:
+      - .:/build
+      - gradle-cache:/root/.gradle
+    working_dir: /build
+    command: sleep infinity
+  test:
+    image: eclipse-temurin:21-jdk-jammy
+    profiles:
+      - test
+    volumes:
+      - .:/build
+      - gradle-cache:/root/.gradle
+    working_dir: /build
+    command: ./gradlew :neoforge:runGameTestServer
+
+volumes:
+  gradle-cache:

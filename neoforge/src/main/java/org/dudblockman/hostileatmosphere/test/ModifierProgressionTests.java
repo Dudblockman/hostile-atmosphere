@@ -109,7 +109,7 @@ public class ModifierProgressionTests {
         data.setModifier(1, Operation.ADD, constant(20.0), "all");
         data.setModifier(2, Operation.ADD, constant(15.0), "lethal");
         int removed = data.clearModifiersForTarget("lethal");
-        if (removed != 1) helper.fail("Expected 1 removed, got " + removed);
+        assertEquals("removed count", 1, removed, helper);
         // "all"-scoped modifier still in place
         assertEquals(20.0, data.getLevelForZone(0, 0, 0, "all"), helper);
         // "lethal" zone now only sees the remaining "all" modifier
@@ -122,7 +122,7 @@ public class ModifierProgressionTests {
         AtmosphereProgressionData data = freshData();
         data.setModifier(1, Operation.ADD, constant(25.0), "all");
         int removed = data.clearModifiersForTarget("lethal");
-        if (removed != 0) helper.fail("Expected 0 removed, got " + removed);
+        assertEquals("removed count", 0, removed, helper);
         assertEquals(25.0, data.getLevelForZone(0, 0, 0, "all"), helper);
         helper.succeed();
     }

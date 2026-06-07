@@ -16,6 +16,22 @@ final class GameTestAssertions {
         }
     }
 
+    static void assertEquals(String label, double expected, double actual, GameTestHelper helper) {
+        if (Math.abs(expected - actual) > DELTA) {
+            String msg = String.format("%s: expected %.4f but was %.4f", label, expected, actual);
+            helper.fail(msg);
+            throw new AssertionError(msg);
+        }
+    }
+
+    static void assertTrue(String label, boolean condition, GameTestHelper helper) {
+        if (!condition) {
+            String msg = label + ": expected true but was false";
+            helper.fail(msg);
+            throw new AssertionError(msg);
+        }
+    }
+
     static void assertEquals(String label, int expected, int actual, GameTestHelper helper) {
         if (expected != actual) {
             String msg = label + ": expected " + expected + " but was " + actual;

@@ -35,8 +35,13 @@ public record ZoneDefinition(
 
     /** Evaluates the ceiling pipeline at the given game tick and world-space X/Z. */
     public double evalCeiling(long tick, double x, double z) {
+        return evalPipeline(ceiling, tick, x, z);
+    }
+
+    /** Evaluates an arbitrary {@link CeilingLayer} pipeline. */
+    public static double evalPipeline(List<CeilingLayer> layers, long tick, double x, double z) {
         double level = 0.0;
-        for (CeilingLayer layer : ceiling) {
+        for (CeilingLayer layer : layers) {
             level = layer.operation().apply(level, layer.source().get(tick, x, z));
         }
         return level;

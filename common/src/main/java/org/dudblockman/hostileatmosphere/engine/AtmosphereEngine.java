@@ -39,6 +39,7 @@ public class AtmosphereEngine {
     private static final ResourceLocation ID_TOXIN_PROTECTION = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"protection_toxin");
     private static final ResourceLocation ID_TOXIN_EXPEDITION = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"expedition_toxin");
     private static final ResourceLocation ID_TOXIN_UNDERWATER = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"underwater_toxin");
+    private static final ResourceLocation ID_TOXIN_RAIN       = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"rain_toxin");
 
     /**
      * Returns the most severe zone the player is in using a global atmosphere level offset.
@@ -170,6 +171,7 @@ public class AtmosphereEngine {
         syncModifier(toxinInst, ID_TOXIN_PROTECTION, protection == ProtectionLevel.SEALED ? -1.0 : Double.NaN);
         syncModifier(toxinInst, ID_TOXIN_EXPEDITION, protection == ProtectionLevel.RESPIRATOR ? cfg.expeditionToxinMultiplier() - 1.0 : Double.NaN);
         syncModifier(toxinInst, ID_TOXIN_UNDERWATER, inWater ? underwaterToxinMult(player, protection, cfg) - 1.0 : Double.NaN);
+        syncModifier(toxinInst, ID_TOXIN_RAIN,       cfg.rainToxinMultiplierEnabled() && player.level().isRaining() && player.isInWater() ? cfg.rainToxinMultiplier() - 1.0 : Double.NaN);
     }
 
     private static void syncModifier(AttributeInstance inst, ResourceLocation id, double desired) {
@@ -330,7 +332,7 @@ public class AtmosphereEngine {
         float airDebtPerSec;
         if (activeZone != null && airMult > 0) {
             airDebtPerSec = (maxAir / (float) activeZone.hazardTimeSecs()) * airMult;
-        } else if ((activeZone == null || protection == ProtectionLevel.SEALED) && data.getAirDebt() > 0) {
+        } else if ((activeZone == null || protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR) && data.getAirDebt() > 0) {
             airDebtPerSec = -(maxAir / (float) cfg.safeZoneRecoverySecs());
         } else {
             airDebtPerSec = 0f;
@@ -338,9 +340,9 @@ public class AtmosphereEngine {
 
         float toxinPerSec;
         if (activeZone != null && toxinMult > 0) {
-            toxinPerSec = (Constants.MAX_TOXIN / activeZone.toxinBuildupSecs()) * toxinMult;
+            toxinPerSec = ((float) Constants.MAX_TOXIN / activeZone.toxinBuildupSecs()) * toxinMult;
         } else if (activeZone == null && data.getToxinLevel() > 0) {
-            toxinPerSec = -(Constants.MAX_TOXIN / cfg.toxinRecoverySecs());
+            toxinPerSec = -(Constants.MAX_TOXIN / (float) cfg.toxinRecoverySecs());
         } else {
             toxinPerSec = 0f;
         }

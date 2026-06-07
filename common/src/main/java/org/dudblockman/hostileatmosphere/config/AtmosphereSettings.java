@@ -24,6 +24,8 @@ public record AtmosphereSettings(
         int toxinThreshold3,
         int toxinThreshold4,
         int toxinDeathCap,
+        boolean rainToxinMultiplierEnabled,
+        float rainToxinMultiplier,
         // --- Protection ---
         float underwaterAirDebtMultiplier,
         float underwaterToxinMultiplier,

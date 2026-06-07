@@ -13,6 +13,7 @@ import net.minecraft.network.chat.Component;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereModifier;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereModifier.Operation;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
+import org.dudblockman.hostileatmosphere.progression.PredicateSource;
 import org.dudblockman.hostileatmosphere.progression.ValueSource;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 
@@ -28,13 +29,15 @@ public final class ModifierCommand {
     /**
      * Command structure:
      *
-     *   /atmosphere modifier list                        — list ALL modifiers across all targets
-     *   /atmosphere modifier <target> list               — list modifiers for one target
-     *   /atmosphere modifier <target> clear              — clear modifiers for one target
-     *   /atmosphere modifier <target> remove <key>       — remove modifier at <key>
-     *   /atmosphere modifier <target> add <key> add|cap|floor constant|sin|perlin ...
+     * <pre>
+     *   /atmosphere modifier list                         — list ALL modifiers across all targets
+     *   /atmosphere modifier &lt;target&gt; list               — list modifiers for one target
+     *   /atmosphere modifier &lt;target&gt; clear              — clear modifiers for one target
+     *   /atmosphere modifier &lt;target&gt; remove &lt;key&gt;       — remove modifier at &lt;key&gt;
+     *   /atmosphere modifier &lt;target&gt; add &lt;key&gt; add|cap|floor constant|sin|perlin ...
+     * </pre>
      *
-     * <target> is "all" (applies to every zone in this dimension) or a zone id like "lethal".
+     * {@code target} is "all" (applies to every zone in this dimension) or a zone id like "lethal".
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher,
                                 SuggestionProvider<CommandSourceStack> targetSuggestions,
@@ -273,6 +276,17 @@ public final class ModifierCommand {
                             p.xzScale(), p.amplitude(), p.fromAmplitude(), p.timeTicks(), p.tweenTicks())
                     : String.format("perlin(xz=%.4g amp=%.4g time=%.0f)",
                             p.xzScale(), p.amplitude(), p.timeTicks());
+        }
+        if (source instanceof PredicateSource ps) {
+            double from = ps.fromMultiplier(), to = ps.toMultiplier();
+            String mul = (from == to)
+                    ? String.format("%.2f", to)
+                    : String.format("%.2f→%.2f", from, to);
+            return ps.tweenTicks() > 0
+                    ? String.format("predicate(%s mul=%s tween=%dt eval=%dt)",
+                            ps.predicateId(), mul, ps.tweenTicks(), ps.evaluationInterval())
+                    : String.format("predicate(%s mul=%s eval=%dt)",
+                            ps.predicateId(), mul, ps.evaluationInterval());
         }
         return source.type();
     }

@@ -1,5 +1,7 @@
 package org.dudblockman.hostileatmosphere.events;
 
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -13,6 +15,7 @@ import net.neoforged.neoforge.event.entity.living.LivingBreatheEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.client.AtmosphereClientData;
@@ -210,6 +213,30 @@ public class AtmosphereEventHandler {
     }
 
     @SubscribeEvent
+    public static void onServerTick(ServerTickEvent.Pre event) {
+        MinecraftServer server = event.getServer();
+        ServerLevel overworld = server.overworld();
+        long tick = overworld.getGameTime();
+        // TODO: PredicateSource evaluates predicates against the overworld regardless of zone dimension.
+        // Fixing requires zone-to-dimension mapping in the tick dispatch; see AtmosphereProgressionData.serverTick.
+        AtmosphereProgressionData.get(server).serverTick(overworld, tick);
+
+        // Tick ValueSource instances embedded in datapack zone ceiling pipelines.
+        // These are not stored in AtmosphereProgressionData so they must be ticked separately.
+        // Without this, PredicateSource instances in zone ceiling layers stay at multiplier=0.0 permanently.
+        for (Map.Entry<ResourceLocation, List<ZoneDefinition>> entry : zoneCache.defs().entrySet()) {
+            ResourceKey<Level> dimKey = ResourceKey.create(Registries.DIMENSION, entry.getKey());
+            ServerLevel dimLevel = server.getLevel(dimKey);
+            if (dimLevel == null) dimLevel = overworld;
+            for (ZoneDefinition zone : entry.getValue()) {
+                for (ZoneDefinition.CeilingLayer layer : zone.ceiling()) {
+                    layer.source().serverTick(dimLevel, tick);
+                }
+            }
+        }
+    }
+
+    @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
         rebuildZoneCache(event.getServer());
     }
@@ -270,7 +297,7 @@ public class AtmosphereEventHandler {
 
         // Ceiling-grid debug particles — rendered in all game modes.
         Integer gridRadius = particleGridRadii.get(player.getUUID());
-        if (gridRadius != null && gameTick % 20 == 0) {
+        if (gridRadius != null && gameTick % 10 == 0) {
             renderCeilingGrid(player, zones, ids, gameTick, px, pz, progression, gridRadius);
         }
 
@@ -313,7 +340,7 @@ public class AtmosphereEventHandler {
                 if (whole > 0) CreateCompat.drainBacktank(player, whole);
             }
             // Baseline drain: 1 unit/second for maintaining the seal while in the zone.
-            if (player.getEyeInFluidType().isAir() && player.tickCount % 20 == 0) {
+            if (player.getEyeInFluidType().isAir() && gameTick % 20 == 0) {
                 CreateCompat.drainBacktank(player);
             }
         }

@@ -30,6 +30,8 @@ public class AtmosphereConfig {
     public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_3;
     public static final ModConfigSpec.IntValue TOXIN_THRESHOLD_4;
     public static final ModConfigSpec.IntValue TOXIN_DEATH_CAP;
+    public static final ModConfigSpec.BooleanValue RAIN_TOXIN_MULTIPLIER_ENABLED;
+    public static final ModConfigSpec.DoubleValue RAIN_TOXIN_MULTIPLIER;
 
     // --- Protection ---
     public static final ModConfigSpec.DoubleValue UNDERWATER_AIR_DEBT_MULTIPLIER;
@@ -112,6 +114,14 @@ public class AtmosphereConfig {
                 .comment("Toxin level cap applied on death — if current toxin exceeds this, it is reduced to this value; if below, it is unchanged. Range 0–1000. Default: 500.")
                 .defineInRange("toxinDeathCap", 500, 0, Constants.MAX_TOXIN);
 
+        RAIN_TOXIN_MULTIPLIER_ENABLED = BUILDER
+                .comment("If true, toxin buildup rate is multiplied during rain. Default: false.")
+                .define("rainToxinMultiplierEnabled", false);
+
+        RAIN_TOXIN_MULTIPLIER = BUILDER
+                .comment("Toxin buildup rate multiplier applied during rain when rainToxinMultiplierEnabled is true. Default: 1.5.")
+                .defineInRange("rainToxinMultiplier", 1.5, 0.0, 10.0);
+
         BUILDER.pop().push("protection");
 
         UNDERWATER_AIR_DEBT_MULTIPLIER = BUILDER
@@ -172,6 +182,8 @@ public class AtmosphereConfig {
                 TOXIN_THRESHOLD_3.get(),
                 TOXIN_THRESHOLD_4.get(),
                 TOXIN_DEATH_CAP.get(),
+                RAIN_TOXIN_MULTIPLIER_ENABLED.get(),
+                RAIN_TOXIN_MULTIPLIER.get().floatValue(),
                 UNDERWATER_AIR_DEBT_MULTIPLIER.get().floatValue(),
                 UNDERWATER_TOXIN_MULTIPLIER.get().floatValue(),
                 CONDUIT_PURIFICATION.get(),

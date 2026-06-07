@@ -53,6 +53,12 @@ neoForge {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+// Predicates under data/hostileatmosphere/predicates/ are test-only fixtures loaded from
+// the dev classpath during game tests. They must not be shipped in the release jar.
+tasks.named('jar', Jar) {
+    exclude 'data/hostileatmosphere/predicates/**'
+}
+
 // Each game-test class needs its own <classname>.empty_platform.nbt structure file.
 // NeoForge's StructureTemplateManager.loadFromResource uses FileToIdConverter("structure", ".nbt"),
 // so data-pack structures live in data/<ns>/structure/ (singular), not structures/ (plural).
@@ -60,7 +66,8 @@ tasks.register('generateTestStructures') {
     def structDir = file('src/main/resources/data/hostileatmosphere/structure')
     def testClasses = [
         'zonelookuptests', 'modifiercomputationtests',
-        'toxinamplifiertests', 'modifierprogressiontests'
+        'toxinamplifiertests', 'modifierprogressiontests',
+        'predicatesourcetests'
     ]
     outputs.files(testClasses.collect { new File(structDir, "${it}.empty_platform.nbt") })
     doLast {
@@ -74,6 +81,10 @@ tasks.register('generateTestStructures') {
 tasks.register('syncLocalRuntimeMods', Sync) {
     from configurations.localRuntime
     into layout.projectDirectory.dir('run/mods')
+}
+
+tasks.named('processResources').configure {
+    dependsOn 'generateTestStructures'
 }
 
 tasks.matching { it.name.startsWith('run') }.configureEach {
