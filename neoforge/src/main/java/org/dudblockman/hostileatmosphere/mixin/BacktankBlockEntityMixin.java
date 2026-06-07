@@ -9,7 +9,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import org.dudblockman.hostileatmosphere.compat.SableCompat;
-import org.dudblockman.hostileatmosphere.events.AtmosphereEventHandler;
+import org.dudblockman.hostileatmosphere.events.ZoneLookup;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -54,7 +54,7 @@ public class BacktankBlockEntityMixin {
             wx = pos.getX(); wy = pos.getY(); wz = pos.getZ();
         }
 
-        if (AtmosphereEventHandler.findZoneAt(level, wx, wy, wz) != null) {
+        if (ZoneLookup.findZoneAt(level, wx, wy, wz) != null) {
             boolean full = airLevel >= BacktankUtil.maxAir(capacityEnchantLevel);
             if (!full && !level.isClientSide() && level.getRandom().nextInt(50) == 0) {
                 // Particle near the local +Y top of the block. On a tilted Sable sub-level the

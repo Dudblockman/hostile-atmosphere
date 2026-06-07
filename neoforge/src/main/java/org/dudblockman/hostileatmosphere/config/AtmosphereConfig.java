@@ -41,6 +41,17 @@ public class AtmosphereConfig {
     public static final ModConfigSpec.DoubleValue CONDUIT_PURIFICATION_TOXIN_MULTIPLIER;
     public static final ModConfigSpec.DoubleValue EXPEDITION_TOXIN_MULTIPLIER;
 
+    // --- Entity hazard ---
+    public static final ModConfigSpec.BooleanValue ENTITY_HAZARD_ENABLED;
+    public static final ModConfigSpec.BooleanValue ENTITY_DAMAGE_PASSIVE;
+    public static final ModConfigSpec.BooleanValue ENTITY_DAMAGE_HOSTILE;
+    public static final ModConfigSpec.BooleanValue ENTITY_DAMAGE_AQUATIC;
+    public static final ModConfigSpec.BooleanValue ENTITY_DAMAGE_NPC;
+    public static final ModConfigSpec.BooleanValue ENTITY_SUPPRESS_PASSIVE;
+    public static final ModConfigSpec.BooleanValue ENTITY_SUPPRESS_HOSTILE;
+    public static final ModConfigSpec.BooleanValue ENTITY_SUPPRESS_AQUATIC;
+    public static final ModConfigSpec.BooleanValue ENTITY_SUPPRESS_NPC;
+
     public static final ModConfigSpec SPEC;
 
     static {
@@ -148,23 +159,81 @@ public class AtmosphereConfig {
                 .comment("Toxin rate multiplier for a player wearing Create's Diving Helmet + Backtank. Default: 0.5.")
                 .defineInRange("expeditionToxinMultiplier", 0.5, 0.0, 1.0);
 
+        BUILDER.pop().push("entityHazard");
+
+        ENTITY_HAZARD_ENABLED = BUILDER
+                .comment("Master toggle for entity hazard effects and spawn suppression. Default: true.")
+                .define("enabled", true);
+
+        ENTITY_DAMAGE_PASSIVE = BUILDER
+                .comment("Apply periodic Miasma damage to passive animals (CREATURE category) in hazard zones. Default: true.")
+                .define("damagePassive", true);
+
+        ENTITY_DAMAGE_HOSTILE = BUILDER
+                .comment("Apply periodic Miasma damage to hostile mobs (MONSTER category) in hazard zones. Default: false.")
+                .define("damageHostile", false);
+
+        ENTITY_DAMAGE_AQUATIC = BUILDER
+                .comment("Apply periodic Miasma damage to aquatic mobs (WATER_CREATURE/WATER_AMBIENT) in hazard zones. Default: false.")
+                .define("damageAquatic", false);
+
+        ENTITY_DAMAGE_NPC = BUILDER
+                .comment("Apply periodic Miasma damage to NPCs (villagers, wandering traders, etc.) in hazard zones. Default: false.")
+                .define("damageNpc", false);
+
+        ENTITY_SUPPRESS_PASSIVE = BUILDER
+                .comment("Prevent passive animals from naturally spawning in hazard zones. Default: true.")
+                .define("suppressPassive", true);
+
+        ENTITY_SUPPRESS_HOSTILE = BUILDER
+                .comment("Prevent hostile mobs from naturally spawning in hazard zones. Default: false.")
+                .define("suppressHostile", false);
+
+        ENTITY_SUPPRESS_AQUATIC = BUILDER
+                .comment("Prevent aquatic mobs from naturally spawning in hazard zones. Default: false.")
+                .define("suppressAquatic", false);
+
+        ENTITY_SUPPRESS_NPC = BUILDER
+                .comment("Prevent NPCs from naturally spawning in hazard zones. Default: true.")
+                .define("suppressNpc", true);
+
         BUILDER.pop();
 
         SPEC = BUILDER.build();
     }
 
     private static volatile AtmosphereSettings cachedSettings;
+    private static volatile EntityHazardSettings cachedEntityHazardSettings;
 
     public static AtmosphereSettings getSettings() {
         return cachedSettings;
     }
 
+    public static EntityHazardSettings getEntityHazardSettings() {
+        return cachedEntityHazardSettings;
+    }
+
     public static void cacheSettings() {
         cachedSettings = read();
+        cachedEntityHazardSettings = readEntityHazard();
+    }
+
+    private static EntityHazardSettings readEntityHazard() {
+        return new EntityHazardSettings(
+                ENTITY_HAZARD_ENABLED.get().booleanValue(),
+                ENTITY_DAMAGE_PASSIVE.get().booleanValue(),
+                ENTITY_DAMAGE_HOSTILE.get().booleanValue(),
+                ENTITY_DAMAGE_AQUATIC.get().booleanValue(),
+                ENTITY_DAMAGE_NPC.get().booleanValue(),
+                ENTITY_SUPPRESS_PASSIVE.get().booleanValue(),
+                ENTITY_SUPPRESS_HOSTILE.get().booleanValue(),
+                ENTITY_SUPPRESS_AQUATIC.get().booleanValue(),
+                ENTITY_SUPPRESS_NPC.get().booleanValue()
+        );
     }
 
     /** Snapshot of the current config values for passing into the common engine. */
-    public static AtmosphereSettings read() {
+    private static AtmosphereSettings read() {
         return new AtmosphereSettings(
                 SAFE_ZONE_RECOVERY_SECS.get(),
                 GRACE_PERIOD_DAYS.get(),

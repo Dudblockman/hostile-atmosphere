@@ -67,7 +67,7 @@ tasks.register('generateTestStructures') {
     def testClasses = [
         'zonelookuptests', 'modifiercomputationtests',
         'toxinamplifiertests', 'modifierprogressiontests',
-        'predicatesourcetests'
+        'predicatesourcetests', 'entityhazardtests'
     ]
     outputs.files(testClasses.collect { new File(structDir, "${it}.empty_platform.nbt") })
     doLast {

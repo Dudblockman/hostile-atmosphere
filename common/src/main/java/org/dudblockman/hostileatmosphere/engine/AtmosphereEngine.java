@@ -2,10 +2,8 @@ package org.dudblockman.hostileatmosphere.engine;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffect;
@@ -29,10 +27,6 @@ import java.util.function.IntConsumer;
 
 public class AtmosphereEngine {
 
-    private static final ResourceKey<DamageType> MIASMA =
-            ResourceKey.create(Registries.DAMAGE_TYPE, ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "miasma"));
-    private static final ResourceKey<DamageType> MIASMA_INTENSE =
-            ResourceKey.create(Registries.DAMAGE_TYPE, ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "miasma_intense"));
     private static final ResourceLocation ID_AIR_PROTECTION  = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"protection_air");
     private static final ResourceLocation ID_AIR_UNDERWATER  = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"underwater_air");
     private static final ResourceLocation ID_AIR_RESPIRATION = ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID,"respiration_air");
@@ -262,23 +256,20 @@ public class AtmosphereEngine {
 
         if (suff >= tier3) {
             damage   = cfg.rampDamageTier3();
-            interval = Math.max(1, Math.round(cfg.rampIntervalTier3Secs() * 20));
+            interval = MiasmaDamageTypes.toIntervalTicks(cfg.rampIntervalTier3Secs());
         } else if (suff >= tier2) {
             damage   = cfg.rampDamageTier2();
-            interval = Math.max(1, Math.round(cfg.rampIntervalTier2Secs() * 20));
+            interval = MiasmaDamageTypes.toIntervalTicks(cfg.rampIntervalTier2Secs());
         } else {
             damage   = cfg.rampDamageTier1();
-            interval = Math.max(1, Math.round(cfg.rampIntervalTier1Secs() * 20));
+            interval = MiasmaDamageTypes.toIntervalTicks(cfg.rampIntervalTier1Secs());
         }
 
         if (player.tickCount % interval == 0) {
-            var key = (suff >= tier3) ? MIASMA_INTENSE : MIASMA;
-            DamageSource miasma = new DamageSource(
-                    player.level().registryAccess()
-                            .registryOrThrow(Registries.DAMAGE_TYPE)
-                            .getHolderOrThrow(key)
-            );
-            player.hurt(miasma, damage);
+            DamageSource source = (suff >= tier3)
+                    ? MiasmaDamageTypes.miasmaIntense(player)
+                    : MiasmaDamageTypes.miasma(player);
+            player.hurt(source, damage);
         }
     }
 

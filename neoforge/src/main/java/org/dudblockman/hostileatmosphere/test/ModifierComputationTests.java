@@ -12,6 +12,7 @@ import org.dudblockman.hostileatmosphere.progression.ValueSource;
 import java.util.List;
 
 import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.assertEquals;
+import org.dudblockman.hostileatmosphere.engine.MiasmaDamageTypes;
 
 @GameTestHolder(Constants.MOD_ID)
 public class ModifierComputationTests {
@@ -246,8 +247,40 @@ public class ModifierComputationTests {
     }
 
     // ------------------------------------------------------------------------------------------
+    // Interval ticks (MiasmaDamageTypes.toIntervalTicks)
+    // ------------------------------------------------------------------------------------------
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void intervalTicksDefault(GameTestHelper helper) {
+        assertIntervalTicks(4.0f, 80, helper);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void intervalTicksHalfSecond(GameTestHelper helper) {
+        assertIntervalTicks(0.5f, 10, helper);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void intervalTicksOneTick(GameTestHelper helper) {
+        assertIntervalTicks(0.05f, 1, helper);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
+    public static void intervalTicksZeroClamped(GameTestHelper helper) {
+        assertIntervalTicks(0.0f, 1, helper);
+        helper.succeed();
+    }
+
+    // ------------------------------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------------------------------
+
+    private static void assertIntervalTicks(float secs, int expectedTicks, GameTestHelper helper) {
+        assertEquals("toIntervalTicks(" + secs + "s)", expectedTicks, MiasmaDamageTypes.toIntervalTicks(secs), helper);
+    }
 
     private static AtmosphereModifier mod(int key, Operation op, double value) {
         return new AtmosphereModifier(key, op, new ValueSource.Constant(0.0, value, 0L, 0L), "all");

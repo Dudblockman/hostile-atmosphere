@@ -1,5 +1,6 @@
 package org.dudblockman.hostileatmosphere.events;
 
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -32,180 +33,31 @@ import org.dudblockman.hostileatmosphere.network.SyncZoneSeverityPayload;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.dudblockman.hostileatmosphere.registry.ModAttachments;
-import org.dudblockman.hostileatmosphere.registry.ModRegistries;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
-import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.core.particles.DustParticleOptions;
-import net.minecraft.network.chat.Component;
-import org.joml.Vector3f;
 
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
 public class AtmosphereEventHandler {
-
-    private record ZonePair(String id, ZoneDefinition def) {}
-
-    /**
-     * Zones per dimension, each list sorted ascending by yCeiling (lowest = most severe first).
-     * Rebuilt on datapack reload.
-     */
-    private record ZoneCache(
-            Map<ResourceLocation, List<ZoneDefinition>> defs,
-            Map<ResourceLocation, List<String>> ids) {
-        static final ZoneCache EMPTY = new ZoneCache(Map.of(), Map.of());
-    }
-    private static volatile ZoneCache zoneCache = ZoneCache.EMPTY;
-    private static volatile Map<ResourceLocation, Integer> leastSevereSecs = Map.of();
 
     /**
      * Tracks last sent zone state per player to avoid redundant packets.
      * int[0] = severity*2 + (approaching?1:0), int[1] = zoneCeilingY, int[2] = zoneFloorY.
      * Ceiling and floor are included so Perlin-noise-driven boundary shifts trigger a resend.
      */
-    private static final Map<UUID, int[]>     lastZoneState      = new ConcurrentHashMap<>();
-    private static final Map<UUID, Boolean>   lastDivingState    = new ConcurrentHashMap<>();
+    private static final Map<UUID, int[]>   lastZoneState     = new ConcurrentHashMap<>();
+    private static final Map<UUID, Boolean> lastDivingState   = new ConcurrentHashMap<>();
     /** Fractional backtank units owed from retroactive debt-recovery drain, pending consumption. */
-    private static final Map<UUID, Float>     backtankDebtDrain  = new ConcurrentHashMap<>();
-    /** Players with ceiling-grid debug particles enabled; value = radius in blocks. */
-    private static final Map<UUID, Integer>   particleGridRadii  = new ConcurrentHashMap<>();
+    private static final Map<UUID, Float>   backtankDebtDrain = new ConcurrentHashMap<>();
 
-    public static Map<ResourceLocation, List<ZoneDefinition>> getCachedZones()  { return zoneCache.defs(); }
-    public static Map<ResourceLocation, List<String>>         getCachedZoneIds() { return zoneCache.ids(); }
-
-    // ------------------------------------------------------------------------------------------
-    // Ceiling-grid debug particles
-    // ------------------------------------------------------------------------------------------
+    public static Map<ResourceLocation, List<ZoneDefinition>> getCachedZones()   { return ZoneLookup.getCachedZones(); }
+    public static Map<ResourceLocation, List<String>>         getCachedZoneIds() { return ZoneLookup.getCachedZoneIds(); }
 
     /** Enables (radius > 0) or disables (radius == 0) the ceiling particle grid for the source player. */
     public static int toggleParticleGrid(CommandSourceStack src, int radius) {
-        ServerPlayer player = src.getPlayer();
-        if (player == null) {
-            src.sendFailure(Component.literal("[HA] Ceiling grid requires a player source."));
-            return 0;
-        }
-        if (radius <= 0) {
-            particleGridRadii.remove(player.getUUID());
-            src.sendSuccess(() -> Component.literal("[HA] Ceiling particle grid disabled."), false);
-            return 0;
-        }
-        particleGridRadii.put(player.getUUID(), radius);
-        src.sendSuccess(() -> Component.literal("[HA] Ceiling particle grid enabled (radius " + radius + "). Use radius 0 to disable."), false);
-        return radius;
-    }
-
-    private static void renderCeilingGrid(ServerPlayer player, List<ZoneDefinition> zones,
-            List<String> ids, long tick, double px, double pz,
-            AtmosphereProgressionData progression, int radius) {
-        ServerLevel level = (ServerLevel) player.level();
-        int cx = (int) Math.floor(px);
-        int cz = (int) Math.floor(pz);
-        int n = zones.size();
-        if (n == 0) return;
-
-        for (int i = 0; i < n; i++) {
-            // Evenly-spaced hue across the colour wheel, full saturation & brightness.
-            int packed = hsbToRgb((float) i / n);
-            float r = ((packed >> 16) & 0xFF) / 255.0f;
-            float g = ((packed >>  8) & 0xFF) / 255.0f;
-            float b = ( packed        & 0xFF) / 255.0f;
-            DustParticleOptions dust = new DustParticleOptions(new Vector3f(r, g, b), 1.0f);
-
-            String zoneId = i < ids.size() ? ids.get(i) : "all";
-            ZoneDefinition zone = zones.get(i);
-
-            for (int dz = -radius; dz <= radius; dz++) {
-                for (int dx = -radius; dx <= radius; dx++) {
-                    double wx = cx + dx + 0.5;
-                    double wz = cz + dz + 0.5;
-                    double base    = zone.evalCeiling(tick, wx, wz);
-                    double ceiling = progression.getEffectiveCeiling(tick, wx, wz, zoneId, base);
-                    level.sendParticles(player, dust, false, wx, ceiling, wz, 1, 0.0, 0.0, 0.0, 0.0);
-                }
-            }
-        }
-    }
-
-    /** Pure HSB→RGB for hue∈[0,1], s=1, b=1 — avoids java.awt.Color in server-side code. */
-    private static int hsbToRgb(float hue) {
-        int h = (int) (hue * 6);
-        float f = hue * 6 - h;
-        float q = 1 - f, t = f;
-        float rv, gv, bv;
-        switch (h % 6) {
-            case 0 -> { rv = 1; gv = t; bv = 0; }
-            case 1 -> { rv = q; gv = 1; bv = 0; }
-            case 2 -> { rv = 0; gv = 1; bv = t; }
-            case 3 -> { rv = 0; gv = q; bv = 1; }
-            case 4 -> { rv = t; gv = 0; bv = 1; }
-            default -> { rv = 1; gv = 0; bv = q; }
-        }
-        return ((int)(rv * 255) << 16) | ((int)(gv * 255) << 8) | (int)(bv * 255);
-    }
-
-    // ------------------------------------------------------------------------------------------
-
-    private static List<ZoneDefinition> dimZones(ResourceLocation dim) {
-        return zoneCache.defs().getOrDefault(dim, List.of());
-    }
-
-    private static List<String> dimIds(ResourceLocation dim) {
-        return zoneCache.ids().getOrDefault(dim, List.of());
-    }
-
-    /**
-     * Zone check usable on both sides.
-     * <ul>
-     *   <li><b>Server</b> ({@link ServerLevel}): full Perlin progression data — ceiling varies by X, Z, and time.</li>
-     *   <li><b>Client</b>: base zone ceilings from the data-pack registry (no Perlin offset available client-side).</li>
-     * </ul>
-     * Always pass world-space coordinates; callers are responsible for transforming sub-level-local positions first.
-     */
-    public static ZoneDefinition findZoneAt(Level level, double x, double y, double z) {
-        if (level instanceof ServerLevel sl) return findZoneAt(sl, x, y, z);
-        // Client: no Perlin data — evaluate each zone's ceiling pipeline at current game tick.
-        ResourceLocation dim = level.dimension().location();
-        long tick = level.getGameTime();
-        return level.registryAccess().registry(ModRegistries.ZONES)
-                .flatMap(reg -> reg.stream()
-                        .filter(zone -> zone.dimension().equals(dim))
-                        .map(zone -> Map.entry(zone.evalCeiling(tick, x, z), zone))
-                        .sorted(Map.Entry.comparingByKey())
-                        .filter(e -> y <= e.getKey())
-                        .map(Map.Entry::getValue)
-                        .findFirst())
-                .orElse(null);
-    }
-
-    /** Convenience lookup for non-player callers (e.g. block entity mixins). */
-    public static ZoneDefinition findZoneAt(ServerLevel level, double x, double y, double z) {
-        ResourceLocation dim = level.dimension().location();
-        AtmosphereProgressionData prog = AtmosphereProgressionData.get(level.getServer());
-        long gameTick = level.getGameTime();
-        return AtmosphereEngine.findZone(dimZones(dim), dimIds(dim), gameTick, x, y, z,
-                (zoneId, base) -> prog.getEffectiveCeiling(gameTick, x, z, zoneId, base));
-    }
-
-    /**
-     * Returns the fully effective ceiling for a zone at the player's position:
-     * zone ceiling pipeline + per-zone progression offset.
-     */
-    public static double getEffectiveCeiling(ServerLevel level, ZoneDefinition zone,
-                                             double x, double z) {
-        ResourceLocation dim = level.dimension().location();
-        List<ZoneDefinition> zones = dimZones(dim);
-        List<String> ids = dimIds(dim);
-        int idx = zones.indexOf(zone);
-        String zoneId = (idx >= 0 && idx < ids.size()) ? ids.get(idx) : "all";
-        long gameTick = level.getGameTime();
-        double base = zone.evalCeiling(gameTick, x, z);
-        return AtmosphereProgressionData.get(level.getServer()).getEffectiveCeiling(gameTick, x, z, zoneId, base);
+        return CeilingGridDebug.toggleGrid(src, radius);
     }
 
     private static int computeFatigueAmp(int toxinLevel, AtmosphereSettings cfg) {
@@ -217,14 +69,14 @@ public class AtmosphereEventHandler {
         MinecraftServer server = event.getServer();
         ServerLevel overworld = server.overworld();
         long tick = overworld.getGameTime();
-        // TODO: PredicateSource evaluates predicates against the overworld regardless of zone dimension.
-        // Fixing requires zone-to-dimension mapping in the tick dispatch; see AtmosphereProgressionData.serverTick.
+        // PredicateSource evaluates predicates against the overworld regardless of zone dimension
+        // because serverTick() needs zone-to-dimension mapping that isn't plumbed through yet.
         AtmosphereProgressionData.get(server).serverTick(overworld, tick);
 
         // Tick ValueSource instances embedded in datapack zone ceiling pipelines.
         // These are not stored in AtmosphereProgressionData so they must be ticked separately.
         // Without this, PredicateSource instances in zone ceiling layers stay at multiplier=0.0 permanently.
-        for (Map.Entry<ResourceLocation, List<ZoneDefinition>> entry : zoneCache.defs().entrySet()) {
+        for (Map.Entry<ResourceLocation, List<ZoneDefinition>> entry : ZoneLookup.getCachedZones().entrySet()) {
             ResourceKey<Level> dimKey = ResourceKey.create(Registries.DIMENSION, entry.getKey());
             ServerLevel dimLevel = server.getLevel(dimKey);
             if (dimLevel == null) dimLevel = overworld;
@@ -238,43 +90,12 @@ public class AtmosphereEventHandler {
 
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
-        rebuildZoneCache(event.getServer());
+        ZoneLookup.rebuildZoneCache(event.getServer());
     }
 
     @SubscribeEvent
     public static void onDatapackSync(OnDatapackSyncEvent event) {
-        rebuildZoneCache(event.getPlayerList().getServer());
-    }
-
-    private static void rebuildZoneCache(MinecraftServer server) {
-        var registry = server.registryAccess().registryOrThrow(ModRegistries.ZONES);
-
-        Map<ResourceLocation, List<ZonePair>> byDim = new LinkedHashMap<>();
-        registry.entrySet().forEach(e ->
-                byDim.computeIfAbsent(e.getValue().dimension(), k -> new ArrayList<>())
-                        .add(new ZonePair(e.getKey().location().getPath(), e.getValue())));
-        byDim.values().forEach(list -> list.sort(Comparator.comparingDouble(p -> p.def().evalCeiling(0, 0, 0))));
-
-        Map<ResourceLocation, List<ZoneDefinition>> newDefs = new LinkedHashMap<>();
-        Map<ResourceLocation, List<String>>         newIds  = new LinkedHashMap<>();
-        byDim.forEach((dim, list) -> {
-            newDefs.put(dim, list.stream().map(ZonePair::def).toList());
-            newIds.put(dim,  list.stream().map(ZonePair::id).toList());
-        });
-        zoneCache = new ZoneCache(Map.copyOf(newDefs), Map.copyOf(newIds));
-
-        Map<ResourceLocation, Integer> newLeastSevere = new LinkedHashMap<>();
-        byDim.forEach((dim, list) ->
-                newLeastSevere.put(dim, list.stream().mapToInt(p -> p.def().hazardTimeSecs()).max().orElse(1)));
-        leastSevereSecs = Map.copyOf(newLeastSevere);
-    }
-
-    /** Returns the zone definition for {@code zoneId} in {@code dim}, or null if not found. */
-    public static ZoneDefinition findZoneByIdForDim(ResourceLocation dim, String zoneId) {
-        List<String> ids = dimIds(dim);
-        List<ZoneDefinition> zones = dimZones(dim);
-        int idx = ids.indexOf(zoneId);
-        return idx >= 0 ? zones.get(idx) : null;
+        ZoneLookup.rebuildZoneCache(event.getPlayerList().getServer());
     }
 
     @SubscribeEvent
@@ -284,8 +105,8 @@ public class AtmosphereEventHandler {
         if (!(entity instanceof ServerPlayer player)) return;
 
         ResourceLocation dim = player.level().dimension().location();
-        List<ZoneDefinition> zones = dimZones(dim);
-        List<String>         ids   = dimIds(dim);
+        List<ZoneDefinition> zones = ZoneLookup.getZonesForDim(dim);
+        List<String>         ids   = ZoneLookup.getIdsForDim(dim);
 
         long   gameTick  = player.level().getGameTime();
         double px = player.getX(), pz = player.getZ();
@@ -295,11 +116,7 @@ public class AtmosphereEventHandler {
                 zones, ids, gameTick, px, player.getEyeY(), pz,
                 (zoneId, base) -> progression.getEffectiveCeiling(gameTick, px, pz, zoneId, base));
 
-        // Ceiling-grid debug particles — rendered in all game modes.
-        Integer gridRadius = particleGridRadii.get(player.getUUID());
-        if (gridRadius != null && gameTick % 10 == 0) {
-            renderCeilingGrid(player, zones, ids, gameTick, px, pz, progression, gridRadius);
-        }
+        CeilingGridDebug.renderForPlayer(player, zones, ids, gameTick, px, pz, progression);
 
         // Creative and spectator skip hazard logic but still get zone sync so particles are visible.
         if (player.isCreative() || player.isSpectator()) {
@@ -368,7 +185,7 @@ public class AtmosphereEventHandler {
         if (activeZone != null) {
             int idx = zones.indexOf(activeZone);
             if (idx >= 0) {
-                int leastSevereTimeSecs = leastSevereSecs.getOrDefault(
+                int leastSevereTimeSecs = ZoneLookup.getLeastSevereSecsForDim(
                         player.level().dimension().location(), activeZone.hazardTimeSecs());
                 hazardIntensity = (float) leastSevereTimeSecs / activeZone.hazardTimeSecs();
 
@@ -426,7 +243,7 @@ public class AtmosphereEventHandler {
         lastZoneState.remove(id);
         lastDivingState.remove(id);
         backtankDebtDrain.remove(id);
-        particleGridRadii.remove(id);
+        CeilingGridDebug.onPlayerLoggedOut(id);
     }
 
     @SubscribeEvent

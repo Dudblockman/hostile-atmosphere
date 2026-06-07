@@ -10,5 +10,6 @@ public class GameTestRegistration {
         event.register(ZoneLookupTests.class);
         event.register(ToxinAmplifierTests.class);
         event.register(PredicateSourceTests.class);
+        event.register(EntityHazardTests.class);
     }
 }

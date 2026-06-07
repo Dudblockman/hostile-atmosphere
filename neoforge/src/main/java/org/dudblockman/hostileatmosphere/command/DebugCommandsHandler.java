@@ -10,6 +10,7 @@ import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.compat.CreateCompat;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
 import org.dudblockman.hostileatmosphere.events.AtmosphereEventHandler;
+import org.dudblockman.hostileatmosphere.events.ZoneLookup;
 import org.dudblockman.hostileatmosphere.registry.ModAttachments;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
@@ -37,10 +38,10 @@ public final class DebugCommandsHandler {
         ModifierCommand.register(event.getDispatcher(),
                 (ctx, builder) -> {
                     builder.suggest("all");
-                    AtmosphereEventHandler.getCachedZoneIds().values().forEach(ids -> ids.forEach(builder::suggest));
+                    ZoneLookup.getCachedZoneIds().values().forEach(ids -> ids.forEach(builder::suggest));
                     return builder.buildFuture();
                 },
-                (src, zoneId) -> AtmosphereEventHandler.findZoneByIdForDim(
+                (src, zoneId) -> ZoneLookup.findZoneByIdForDim(
                         src.getLevel().dimension().location(), zoneId));
         DebugCommands.register(
                 event.getDispatcher(),
@@ -48,14 +49,14 @@ public final class DebugCommandsHandler {
                 AtmosphereConfig::getSettings,
                 player -> player.removeEffect(ModEffects.ATMOSPHERIC_TOXICITY),
                 CreateCompat::getProtection,
-                player -> AtmosphereEventHandler.findZoneAt(
+                player -> ZoneLookup.findZoneAt(
                         (ServerLevel) player.level(), player.getX(), player.getEyeY(), player.getZ()),
                 player -> {
                     var sl = (ServerLevel) player.level();
-                    ZoneDefinition zone = AtmosphereEventHandler.findZoneAt(
+                    ZoneDefinition zone = ZoneLookup.findZoneAt(
                             sl, player.getX(), player.getEyeY(), player.getZ());
                     return zone != null
-                            ? AtmosphereEventHandler.getEffectiveCeiling(sl, zone, player.getX(), player.getZ())
+                            ? ZoneLookup.getEffectiveCeiling(sl, zone, player.getX(), player.getZ())
                             : 0.0;
                 }
         );
