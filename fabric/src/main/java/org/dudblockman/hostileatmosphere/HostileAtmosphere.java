@@ -6,6 +6,6 @@ public class HostileAtmosphere implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        CommonClass.init();
+        Constants.LOG.info("{} initializing", Constants.MOD_NAME);
     }
 }

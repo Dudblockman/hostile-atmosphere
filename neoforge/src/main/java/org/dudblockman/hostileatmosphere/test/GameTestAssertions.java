@@ -40,6 +40,14 @@ final class GameTestAssertions {
         }
     }
 
+    static void assertEquals(String label, long expected, long actual, GameTestHelper helper) {
+        if (expected != actual) {
+            String msg = label + ": expected " + expected + " but was " + actual;
+            helper.fail(msg);
+            throw new AssertionError(msg);
+        }
+    }
+
     static void assertNotNull(String msg, Object obj, GameTestHelper helper) {
         if (obj == null) {
             String m = msg + ": expected non-null but was null";

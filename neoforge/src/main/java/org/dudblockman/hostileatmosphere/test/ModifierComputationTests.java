@@ -102,33 +102,33 @@ public class ModifierComputationTests {
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void constantRampAtStart(GameTestHelper helper) {
-        assertEquals(0.0, rampMod(64.0, 100L, 0L).getCurrentValue(0), helper);
+        assertEquals(0.0, rampMod(64.0, 100L, 0L).source().get(0), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void constantRampAtEnd(GameTestHelper helper) {
-        assertEquals(64.0, rampMod(64.0, 100L, 0L).getCurrentValue(100), helper);
+        assertEquals(64.0, rampMod(64.0, 100L, 0L).source().get(100), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void constantRampAtMidpoint(GameTestHelper helper) {
-        assertEquals(32.0, rampMod(64.0, 100L, 0L).getCurrentValue(50), helper);
+        assertEquals(32.0, rampMod(64.0, 100L, 0L).source().get(50), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void constantRampPastEnd(GameTestHelper helper) {
-        assertEquals(64.0, rampMod(64.0, 100L, 0L).getCurrentValue(200), helper);
+        assertEquals(64.0, rampMod(64.0, 100L, 0L).source().get(200), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void constantInstant(GameTestHelper helper) {
         var m = new AtmosphereModifier(0, Operation.ADD, new ValueSource.Constant(0.0, 64.0, 0L, 0L), "all");
-        assertEquals(64.0, m.getCurrentValue(0), helper);
-        assertEquals(64.0, m.getCurrentValue(9999), helper);
+        assertEquals(64.0, m.source().get(0), helper);
+        assertEquals(64.0, m.source().get(9999), helper);
         helper.succeed();
     }
 

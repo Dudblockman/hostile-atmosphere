@@ -9,7 +9,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import org.dudblockman.hostileatmosphere.compat.SableCompat;
-import org.dudblockman.hostileatmosphere.events.ZoneLookup;
+import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -57,18 +57,25 @@ public class BacktankBlockEntityMixin {
         if (ZoneLookup.findZoneAt(level, wx, wy, wz) != null) {
             boolean full = airLevel >= BacktankUtil.maxAir(capacityEnchantLevel);
             if (!full && !level.isClientSide() && level.getRandom().nextInt(50) == 0) {
-                // Particle near the local +Y top of the block. On a tilted Sable sub-level the
-                // local Y offset must be transformed through the pose before being emitted.
-                double px, py, pz;
-                if (worldPos != null) {
-                    Vec3 pp = SableCompat.getWorldSpacePos(be, 0.8);
-                    px = pp.x; py = pp.y; pz = pp.z;
-                } else {
-                    px = wx + 0.5; py = wy + 0.8; pz = wz + 0.5;
-                }
-                ((ServerLevel) level).sendParticles(ParticleTypes.CRIT, px, py, pz, 4, 0.2, 0.05, 0.2, 0.1);
+                hostileatmosphere$emitBlockedParticle((ServerLevel) level, worldPos, wx, wy, wz);
             }
             ci.cancel();
         }
+    }
+
+    // Particle near the local +Y top of the block. On a tilted Sable sub-level the
+    // local Y offset must be transformed through the pose before being emitted.
+    private void hostileatmosphere$emitBlockedParticle(ServerLevel level, Vec3 worldPos,
+            double wx, double wy, double wz) {
+        double px, py, pz;
+        if (worldPos != null) {
+            BlockEntity be = (BlockEntity) (Object) this;
+            Vec3 pp = SableCompat.getWorldSpacePos(be, 0.8);
+            if (pp == null) { px = wx + 0.5; py = wy + 0.8; pz = wz + 0.5; }
+            else { px = pp.x; py = pp.y; pz = pp.z; }
+        } else {
+            px = wx + 0.5; py = wy + 0.8; pz = wz + 0.5;
+        }
+        level.sendParticles(ParticleTypes.CRIT, px, py, pz, 4, 0.2, 0.05, 0.2, 0.1);
     }
 }

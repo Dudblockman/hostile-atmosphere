@@ -34,11 +34,6 @@ public class AtmosphericToxicityEffect extends MobEffect {
     }
 
     @Override
-    public boolean shouldApplyEffectTickThisTick(int duration, int amplifier) {
-        return super.shouldApplyEffectTickThisTick(duration, amplifier);
-    }
-
-    @Override
     public boolean applyEffectTick(LivingEntity entity, int amplifier) {
         if (amplifier >= 3) {
             entity.hurt(entity.damageSources().wither(), 1.0f);

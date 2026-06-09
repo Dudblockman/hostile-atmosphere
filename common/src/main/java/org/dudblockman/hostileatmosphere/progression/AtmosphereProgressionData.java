@@ -10,14 +10,16 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.dudblockman.hostileatmosphere.Constants;
 
-import java.util.ArrayList;
-import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Map;
 import java.util.TreeMap;
 
 public class AtmosphereProgressionData extends SavedData {
 
     private static final String DATA_NAME = Constants.MOD_ID + "_progression";
+    private static final Logger LOGGER = LoggerFactory.getLogger(AtmosphereProgressionData.class);
     private static final Factory<AtmosphereProgressionData> FACTORY =
             new Factory<>(AtmosphereProgressionData::new, AtmosphereProgressionData::load, null);
 
@@ -49,23 +51,10 @@ public class AtmosphereProgressionData extends SavedData {
      */
     public double getEffectiveCeiling(long tick, double x, double z, String zoneId, double baseCeiling) {
         double effective = baseCeiling;
-        List<Map.Entry<Integer, AtmosphereModifier>> toSettle = new ArrayList<>();
-        List<AtmosphereModifier> settled = new ArrayList<>();
         for (var entry : modifiers.entrySet()) {
             AtmosphereModifier mod = entry.getValue();
             if (!mod.target().equals("all") && !mod.target().equals(zoneId)) continue;
-            ValueSource settledSource = mod.source().settle(tick);
-            if (settledSource != mod.source()) {
-                AtmosphereModifier newMod = new AtmosphereModifier(mod.key(), mod.operation(), settledSource, mod.target());
-                toSettle.add(entry);
-                settled.add(newMod);
-                mod = newMod;
-            }
-            effective = mod.operation().apply(effective, mod.getCurrentValue(tick, x, z));
-        }
-        if (!toSettle.isEmpty()) {
-            for (int i = 0; i < toSettle.size(); i++) toSettle.get(i).setValue(settled.get(i));
-            setDirty();
+            effective = mod.operation().apply(effective, mod.source().get(tick, x, z));
         }
         return effective;
     }
@@ -85,7 +74,7 @@ public class AtmosphereProgressionData extends SavedData {
     public static double computeLevel(Iterable<AtmosphereModifier> modifiers, long tick) {
         double level = 0.0;
         for (AtmosphereModifier mod : modifiers) {
-            level = mod.operation().apply(level, mod.getCurrentValue(tick));
+            level = mod.operation().apply(level, mod.source().get(tick));
         }
         return level;
     }
@@ -109,7 +98,14 @@ public class AtmosphereProgressionData extends SavedData {
      */
     public void serverTick(ServerLevel level, long tick) {
         boolean dirty = false;
-        for (AtmosphereModifier mod : modifiers.values()) {
+        for (var entry : modifiers.entrySet()) {
+            AtmosphereModifier mod = entry.getValue();
+            ValueSource settledSource = mod.source().settle(tick);
+            if (settledSource != mod.source()) {
+                mod = new AtmosphereModifier(mod.key(), mod.operation(), settledSource, mod.target());
+                entry.setValue(mod);
+                dirty = true;
+            }
             dirty |= mod.source().serverTick(level, tick);
         }
         if (dirty) setDirty();
@@ -151,7 +147,7 @@ public class AtmosphereProgressionData extends SavedData {
         ListTag list = new ListTag();
         for (AtmosphereModifier mod : modifiers.values()) {
             AtmosphereModifier.CODEC.encodeStart(NbtOps.INSTANCE, mod)
-                    .result().ifPresent(list::add);
+                    .resultOrPartial(LOGGER::error).ifPresent(list::add);
         }
         tag.put("modifiers", list);
         return tag;
@@ -163,7 +159,7 @@ public class AtmosphereProgressionData extends SavedData {
         ListTag list = tag.getList("modifiers", Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size(); i++) {
             AtmosphereModifier.CODEC.decode(NbtOps.INSTANCE, list.get(i))
-                    .result()
+                    .resultOrPartial(LOGGER::error)
                     .ifPresent(pair -> data.modifiers.put(pair.getFirst().key(), pair.getFirst()));
         }
         return data;

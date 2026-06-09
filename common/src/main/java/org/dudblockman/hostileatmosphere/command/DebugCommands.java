@@ -8,7 +8,7 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.dudblockman.hostileatmosphere.Constants;
-import org.dudblockman.hostileatmosphere.compat.ProtectionLevel;
+import org.dudblockman.hostileatmosphere.engine.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.engine.AtmosphereEngine;
@@ -77,6 +77,10 @@ public final class DebugCommands {
                                Function<ServerPlayer, Double> effectiveCeilingGetter) {
         PlayerAtmosphereData data = dataGetter.apply(player);
         AtmosphereSettings cfg = configGetter.get();
+        if (cfg == null) {
+            src.sendFailure(Component.literal("[HA] Config not yet loaded."));
+            return 0;
+        }
         int maxAir = player.getMaxAirSupply();
         ZoneDefinition activeZone = activeZoneGetter.apply(player);
         ProtectionLevel protection = protectionGetter.apply(player);
@@ -100,7 +104,7 @@ public final class DebugCommands {
 
         src.sendSuccess(() -> Component.literal(String.format(
                 "[HA] %s | eyeY=%.1f | %s | protection=%s\n" +
-                "  airDebt=%d/%d  ceiling=%d  air=%d  suffTicks=%d  graceTicks=%d\n" +
+                "  airDebt=%d/%d  remain=%d  air=%d  suffTicks=%d  graceTicks=%d\n" +
                 "  toxin=%d/" + Constants.MAX_TOXIN + "  effect=%s\n" +
                 "  airDebt: %s | toxin: %s",
                 player.getName().getString(),
@@ -124,14 +128,8 @@ public final class DebugCommands {
                               Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
                               Consumer<ServerPlayer> removeEffect) {
         PlayerAtmosphereData data = dataGetter.apply(player);
-        data.setAirDebt(0);
-        data.setDrainAccumulator(0f);
-        data.setRecoveryAccumulator(0f);
-        data.setSuffocationTicks(0);
+        data.reset(0);
         data.setGracePeriodTicks(0);
-        data.setToxinLevel(0);
-        data.setToxinAccumulator(0f);
-        data.setToxinRecoveryAccumulator(0f);
         player.setAirSupply(player.getMaxAirSupply());
         removeEffect.accept(player);
         src.sendSuccess(() -> Component.literal("[HA] Reset " + player.getName().getString()), false);
@@ -143,6 +141,8 @@ public final class DebugCommands {
         PlayerAtmosphereData data = dataGetter.apply(player);
         data.setAirDebt(Math.min(amount, player.getMaxAirSupply()));
         data.setSuffocationTicks(0);
+        data.setDrainAccumulator(0f);
+        data.setRecoveryAccumulator(0f);
         int set = data.getAirDebt();
         src.sendSuccess(() -> Component.literal(
                 "[HA] airDebt=" + set + " for " + player.getName().getString()), false);
@@ -154,6 +154,8 @@ public final class DebugCommands {
                                  Consumer<ServerPlayer> removeEffect) {
         PlayerAtmosphereData data = dataGetter.apply(player);
         data.setToxinLevel(Math.min(amount, Constants.MAX_TOXIN));
+        data.setToxinAccumulator(0f);
+        data.setToxinRecoveryAccumulator(0f);
         // Remove the effect so the engine re-applies with the correct amplifier on the next tick
         removeEffect.accept(player);
         int set = data.getToxinLevel();
@@ -174,6 +176,10 @@ public final class DebugCommands {
 
     private static int showConfig(CommandSourceStack src, Supplier<AtmosphereSettings> configGetter) {
         AtmosphereSettings cfg = configGetter.get();
+        if (cfg == null) {
+            src.sendFailure(Component.literal("[HA] Config not yet loaded."));
+            return 0;
+        }
         src.sendSuccess(() -> Component.literal(String.format(
                 "[HA] Config:\n" +
                 "  recovery=%ds  grace=%dd\n" +

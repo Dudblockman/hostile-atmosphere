@@ -1,13 +1,15 @@
-package org.dudblockman.hostileatmosphere.events;
+package org.dudblockman.hostileatmosphere.progression;
 
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import org.dudblockman.hostileatmosphere.engine.AtmosphereEngine;
-import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
-import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.dudblockman.hostileatmosphere.registry.ModRegistries;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -21,7 +23,9 @@ import java.util.Map;
  */
 public final class ZoneLookup {
 
-    private record ZonePair(String id, ZoneDefinition def) {}
+    private static final Logger LOGGER = LoggerFactory.getLogger(ZoneLookup.class);
+
+    public record Located(String id, ZoneDefinition def) {}
 
     /**
      * Zones per dimension, each list sorted ascending by yCeiling (lowest = most severe first).
@@ -29,12 +33,13 @@ public final class ZoneLookup {
      */
     private record ZoneCache(
             Map<ResourceLocation, List<ZoneDefinition>> defs,
-            Map<ResourceLocation, List<String>> ids) {
-        static final ZoneCache EMPTY = new ZoneCache(Map.of(), Map.of());
+            Map<ResourceLocation, List<String>> ids,
+            Map<ResourceLocation, Integer> leastSevereSecs,
+            Map<ResourceLocation, ResourceKey<Level>> dimKeys) {
+        static final ZoneCache EMPTY = new ZoneCache(Map.of(), Map.of(), Map.of(), Map.of());
     }
 
     private static volatile ZoneCache zoneCache = ZoneCache.EMPTY;
-    private static volatile Map<ResourceLocation, Integer> leastSevereSecs = Map.of();
 
     private ZoneLookup() {}
 
@@ -50,7 +55,11 @@ public final class ZoneLookup {
     }
 
     public static int getLeastSevereSecsForDim(ResourceLocation dim, int fallback) {
-        return leastSevereSecs.getOrDefault(dim, fallback);
+        return zoneCache.leastSevereSecs().getOrDefault(dim, fallback);
+    }
+
+    public static ResourceKey<Level> getDimKeyFor(ResourceLocation dim) {
+        return zoneCache.dimKeys().getOrDefault(dim, ResourceKey.create(Registries.DIMENSION, dim));
     }
 
     /**
@@ -80,26 +89,26 @@ public final class ZoneLookup {
     /** Convenience lookup for non-player callers (e.g. block entity mixins). */
     public static ZoneDefinition findZoneAt(ServerLevel level, double x, double y, double z) {
         ResourceLocation dim = level.dimension().location();
+        List<ZoneDefinition> zones = getZonesForDim(dim);
+        List<String> ids = getIdsForDim(dim);
+        long tick = level.getGameTime();
         AtmosphereProgressionData prog = AtmosphereProgressionData.get(level.getServer());
-        long gameTick = level.getGameTime();
-        return AtmosphereEngine.findZone(getZonesForDim(dim), getIdsForDim(dim), gameTick, x, y, z,
-                (zoneId, base) -> prog.getEffectiveCeiling(gameTick, x, z, zoneId, base));
+        return AtmosphereEngine.findZone(zones, ids, tick, x, y, z,
+                (id, base) -> prog.getEffectiveCeiling(tick, x, z, id, base));
     }
 
-    /**
-     * Returns the fully effective ceiling for a zone at the player's position:
-     * zone ceiling pipeline + per-zone progression offset.
-     */
-    public static double getEffectiveCeiling(ServerLevel level, ZoneDefinition zone,
-                                             double x, double z) {
+    /** Returns the zone and its ID at the given position, or {@code null} if in safe air. */
+    public static Located findLocatedZone(ServerLevel level, double x, double y, double z) {
         ResourceLocation dim = level.dimension().location();
         List<ZoneDefinition> zones = getZonesForDim(dim);
         List<String> ids = getIdsForDim(dim);
-        int idx = zones.indexOf(zone);
-        String zoneId = (idx >= 0 && idx < ids.size()) ? ids.get(idx) : "all";
-        long gameTick = level.getGameTime();
-        double base = zone.evalCeiling(gameTick, x, z);
-        return AtmosphereProgressionData.get(level.getServer()).getEffectiveCeiling(gameTick, x, z, zoneId, base);
+        long tick = level.getGameTime();
+        AtmosphereProgressionData prog = AtmosphereProgressionData.get(level.getServer());
+        ZoneDefinition found = AtmosphereEngine.findZone(zones, ids, tick, x, y, z,
+                (id, base) -> prog.getEffectiveCeiling(tick, x, z, id, base));
+        if (found == null) return null;
+        int idx = zones.indexOf(found);
+        return idx >= 0 ? new Located(ids.get(idx), found) : null;
     }
 
     /** Returns the zone definition for {@code zoneId} in {@code dim}, or null if not found. */
@@ -110,26 +119,57 @@ public final class ZoneLookup {
         return idx >= 0 ? zones.get(idx) : null;
     }
 
-    static void rebuildZoneCache(MinecraftServer server) {
+    public static void tickAllZoneSources(MinecraftServer server, long tick) {
+        ZoneCache cache = zoneCache;
+        ServerLevel overworld = server.overworld();
+        for (Map.Entry<ResourceLocation, List<ZoneDefinition>> entry : cache.defs().entrySet()) {
+            ServerLevel dimLevel = server.getLevel(cache.dimKeys().get(entry.getKey()));
+            if (dimLevel == null) dimLevel = overworld;
+            for (ZoneDefinition zone : entry.getValue()) {
+                for (ZoneDefinition.CeilingLayer layer : zone.ceiling()) {
+                    layer.source().serverTick(dimLevel, tick);
+                }
+            }
+        }
+    }
+
+    public static void rebuildZoneCache(MinecraftServer server) {
         var registry = server.registryAccess().registryOrThrow(ModRegistries.ZONES);
 
-        Map<ResourceLocation, List<ZonePair>> byDim = new LinkedHashMap<>();
+        Map<ResourceLocation, List<Located>> byDim = new LinkedHashMap<>();
         registry.entrySet().forEach(e ->
                 byDim.computeIfAbsent(e.getValue().dimension(), k -> new ArrayList<>())
-                        .add(new ZonePair(e.getKey().location().getPath(), e.getValue())));
+                        // Use toString() to include the namespace, ensuring cross-namespace uniqueness.
+                        .add(new Located(e.getKey().location().toString(), e.getValue())));
+        // Sort ascending by ceiling at origin, tick 0. Zones with animated ceilings may cross at
+        // runtime — see the crossing-ceiling warning loop below.
         byDim.values().forEach(list -> list.sort(Comparator.comparingDouble(p -> p.def().evalCeiling(0, 0, 0))));
+
+        byDim.forEach((dim, list) -> {
+            for (int i = 0; i + 1 < list.size(); i++) {
+                ZoneDefinition a = list.get(i).def();
+                ZoneDefinition b = list.get(i + 1).def();
+                for (long t : new long[]{0L, 6000L, 12000L, 18000L}) {
+                    if (a.evalCeiling(t, 0, 0) > b.evalCeiling(t, 0, 0)) {
+                        LOGGER.warn("[HostileAtmosphere] Zones '{}' and '{}' in dimension '{}' may have crossing ceilings at runtime.",
+                                list.get(i).id(), list.get(i + 1).id(), dim);
+                        break;
+                    }
+                }
+            }
+        });
 
         Map<ResourceLocation, List<ZoneDefinition>> newDefs = new LinkedHashMap<>();
         Map<ResourceLocation, List<String>>         newIds  = new LinkedHashMap<>();
+        Map<ResourceLocation, Integer>              newLeastSevere = new LinkedHashMap<>();
+        Map<ResourceLocation, ResourceKey<Level>>   newDimKeys = new LinkedHashMap<>();
         byDim.forEach((dim, list) -> {
-            newDefs.put(dim, list.stream().map(ZonePair::def).toList());
-            newIds.put(dim,  list.stream().map(ZonePair::id).toList());
+            newDefs.put(dim, list.stream().map(Located::def).toList());
+            newIds.put(dim,  list.stream().map(Located::id).toList());
+            newLeastSevere.put(dim, list.stream().mapToInt(p -> p.def().hazardTimeSecs()).max().orElse(1));
+            newDimKeys.put(dim, ResourceKey.create(Registries.DIMENSION, dim));
         });
-        zoneCache = new ZoneCache(Map.copyOf(newDefs), Map.copyOf(newIds));
-
-        Map<ResourceLocation, Integer> newLeastSevere = new LinkedHashMap<>();
-        byDim.forEach((dim, list) ->
-                newLeastSevere.put(dim, list.stream().mapToInt(p -> p.def().hazardTimeSecs()).max().orElse(1)));
-        leastSevereSecs = Map.copyOf(newLeastSevere);
+        zoneCache = new ZoneCache(Map.copyOf(newDefs), Map.copyOf(newIds),
+                Map.copyOf(newLeastSevere), Map.copyOf(newDimKeys));
     }
 }

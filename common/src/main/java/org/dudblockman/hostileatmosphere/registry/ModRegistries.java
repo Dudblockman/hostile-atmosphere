@@ -9,7 +9,6 @@ import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 public class ModRegistries {
 
     /** Registry key for the data-pack driven zone registry. JSON files live at data/&lt;ns&gt;/zones/&lt;id&gt;.json. */
-    @SuppressWarnings("null")
     public static final ResourceKey<Registry<ZoneDefinition>> ZONES =
             ResourceKey.createRegistryKey(
                     ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "zones"));

@@ -9,11 +9,10 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.compat.CreateCompat;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
-import org.dudblockman.hostileatmosphere.events.AtmosphereEventHandler;
-import org.dudblockman.hostileatmosphere.events.ZoneLookup;
-import org.dudblockman.hostileatmosphere.registry.ModAttachments;
+import org.dudblockman.hostileatmosphere.command.CeilingGridDebug;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
-import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
+import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
+import org.dudblockman.hostileatmosphere.registry.ModAttachments;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
 
 /**
@@ -32,7 +31,7 @@ public final class DebugCommandsHandler {
                 .requires(src -> src.hasPermission(2))
                 .then(Commands.literal("particles")
                         .then(Commands.argument("radius", IntegerArgumentType.integer(0, 32))
-                                .executes(ctx -> AtmosphereEventHandler.toggleParticleGrid(ctx.getSource(),
+                                .executes(ctx -> CeilingGridDebug.toggleGrid(ctx.getSource(),
                                         IntegerArgumentType.getInteger(ctx, "radius"))))));
 
         ModifierCommand.register(event.getDispatcher(),
@@ -53,11 +52,13 @@ public final class DebugCommandsHandler {
                         (ServerLevel) player.level(), player.getX(), player.getEyeY(), player.getZ()),
                 player -> {
                     var sl = (ServerLevel) player.level();
-                    ZoneDefinition zone = ZoneLookup.findZoneAt(
+                    ZoneLookup.Located loc = ZoneLookup.findLocatedZone(
                             sl, player.getX(), player.getEyeY(), player.getZ());
-                    return zone != null
-                            ? ZoneLookup.getEffectiveCeiling(sl, zone, player.getX(), player.getZ())
-                            : 0.0;
+                    if (loc == null) return 0.0;
+                    long tick = sl.getGameTime();
+                    double base = loc.def().evalCeiling(tick, player.getX(), player.getZ());
+                    return AtmosphereProgressionData.get(sl.getServer())
+                            .getEffectiveCeiling(tick, player.getX(), player.getZ(), loc.id(), base);
                 }
         );
     }

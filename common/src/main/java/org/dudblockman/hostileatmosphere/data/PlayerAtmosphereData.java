@@ -82,6 +82,20 @@ public class PlayerAtmosphereData {
     public float getToxinRecoveryAccumulator() { return toxinRecoveryAccumulator; }
     public void setToxinRecoveryAccumulator(float v) { toxinRecoveryAccumulator = v; }
 
+    /**
+     * Resets all transient atmosphere state. Does not modify {@link #gracePeriodTicks}.
+     * @param retainedToxin toxin level to preserve (0 for full reset; capped value on death)
+     */
+    public void reset(int retainedToxin) {
+        airDebt = 0;
+        drainAccumulator = 0f;
+        recoveryAccumulator = 0f;
+        suffocationTicks = 0;
+        toxinLevel = retainedToxin;
+        toxinAccumulator = 0f;
+        toxinRecoveryAccumulator = 0f;
+    }
+
     /** True on the very first tick — grace period has never been initialised. */
     public boolean needsInit() { return gracePeriodTicks == -1; }
 }

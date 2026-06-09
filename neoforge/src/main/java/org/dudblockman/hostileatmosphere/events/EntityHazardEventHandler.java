@@ -13,10 +13,11 @@ import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
+import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.config.EntityHazardSettings;
-import org.dudblockman.hostileatmosphere.engine.EntityAirState;
 import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
+import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -24,7 +25,7 @@ import java.util.WeakHashMap;
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
 public class EntityHazardEventHandler {
 
-    private static final Map<LivingEntity, EntityAirState> entityAirState = new WeakHashMap<>();
+    private static final Map<LivingEntity, EntityHazardEngine.EntityAirState> entityAirState = new WeakHashMap<>();
 
     @SubscribeEvent
     public static void onEntityTick(EntityTickEvent.Post event) {
@@ -34,6 +35,8 @@ public class EntityHazardEventHandler {
 
         EntityHazardSettings cfg = AtmosphereConfig.getEntityHazardSettings();
         if (cfg == null) return;
+        AtmosphereSettings atmosphereSettings = AtmosphereConfig.getSettings();
+        if (atmosphereSettings == null) return;
 
         if (!EntityHazardEngine.isSubjectToHazard(living)) return;
         if (living.isDeadOrDying()) {
@@ -44,10 +47,10 @@ public class EntityHazardEventHandler {
         if (!(living.level() instanceof ServerLevel serverLevel)) return;
 
         ZoneDefinition activeZone = ZoneLookup.findZoneAt(serverLevel, living.getX(), living.getEyeY(), living.getZ());
-        EntityAirState current = entityAirState.getOrDefault(living, EntityAirState.ZERO);
-        EntityAirState next = EntityHazardEngine.tickAirDebt(living, current, activeZone);
+        EntityHazardEngine.EntityAirState current = entityAirState.getOrDefault(living, EntityHazardEngine.EntityAirState.ZERO);
+        EntityHazardEngine.EntityAirState next = EntityHazardEngine.tickAirDebt(living, current, activeZone, atmosphereSettings);
 
-        if (next == EntityAirState.ZERO) {
+        if (next == EntityHazardEngine.EntityAirState.ZERO) {
             entityAirState.remove(living);
         } else {
             entityAirState.put(living, next);

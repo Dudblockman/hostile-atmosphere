@@ -1,4 +1,4 @@
-package org.dudblockman.hostileatmosphere.events;
+package org.dudblockman.hostileatmosphere.command;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.particles.DustParticleOptions;
@@ -67,7 +67,7 @@ public final class CeilingGridDebug {
             float b = ( packed        & 0xFF) / 255.0f;
             DustParticleOptions dust = new DustParticleOptions(new Vector3f(r, g, b), 1.0f);
 
-            String zoneId = i < ids.size() ? ids.get(i) : "all";
+            String zoneId = ids.get(i);
             ZoneDefinition zone = zones.get(i);
 
             for (int dz = -radius; dz <= radius; dz++) {

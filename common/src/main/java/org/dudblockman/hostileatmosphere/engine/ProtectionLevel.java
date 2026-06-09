@@ -1,4 +1,4 @@
-package org.dudblockman.hostileatmosphere.compat;
+package org.dudblockman.hostileatmosphere.engine;
 
 public enum ProtectionLevel {
     /** No Create diving equipment, or empty backtank. */

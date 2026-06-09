@@ -6,6 +6,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.neoforged.fml.ModList;
+import org.dudblockman.hostileatmosphere.engine.ProtectionLevel;
 
 /**
  * Soft dependency on Create. Guards all Create class references inside the
@@ -18,6 +19,7 @@ import net.neoforged.fml.ModList;
 public final class CreateCompat {
 
     private static final boolean LOADED = ModList.get().isLoaded("create");
+    private static final String VISUAL_BACKTANK_AIR = "VisualBacktankAir";
 
     private CreateCompat() {}
 
@@ -37,7 +39,7 @@ public final class CreateCompat {
     }
 
     /**
-     * Writes (or removes) the "VisualBacktankAir" key in the entity's persistent
+     * Writes (or removes) the VISUAL_BACKTANK_AIR key in the entity's persistent
      * data so Create's RemainingAirOverlay — and any custom overlay — can read
      * the remaining backtank air. Must be called client-side each tick.
      */
@@ -47,7 +49,8 @@ public final class CreateCompat {
     }
 
     public static void clearVisualAir(LivingEntity entity) {
-        entity.getPersistentData().remove("VisualBacktankAir");
+        if (!LOADED) return;
+        entity.getPersistentData().remove(VISUAL_BACKTANK_AIR);
     }
 
     // -------------------------------------------------------------------------
@@ -87,9 +90,9 @@ public final class CreateCompat {
         static void updateVisualAir(LivingEntity entity) {
             var chest = entity.getItemBySlot(EquipmentSlot.CHEST);
             if (BacktankUtil.hasAirRemaining(chest)) {
-                entity.getPersistentData().putInt("VisualBacktankAir", BacktankUtil.getAir(chest));
+                entity.getPersistentData().putInt(VISUAL_BACKTANK_AIR, BacktankUtil.getAir(chest));
             } else {
-                entity.getPersistentData().remove("VisualBacktankAir");
+                entity.getPersistentData().remove(VISUAL_BACKTANK_AIR);
             }
         }
     }

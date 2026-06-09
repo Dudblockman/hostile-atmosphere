@@ -4,11 +4,16 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.config.EntityHazardSettings;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.dudblockman.hostileatmosphere.registry.ModEntityTags;
 
 public class EntityHazardEngine {
+
+    public record EntityAirState(int airDebt, float drainAccumulator, int suffocationTicks) {
+        public static final EntityAirState ZERO = new EntityAirState(0, 0f, 0);
+    }
 
     public static boolean isSubjectToHazard(LivingEntity entity) {
         if (entity instanceof Player) return false;
@@ -16,6 +21,7 @@ public class EntityHazardEngine {
     }
 
     public static boolean isSubjectToHazard(EntityType<?> type) {
+        if (type == EntityType.PLAYER) return false;
         return !type.is(ModEntityTags.HAZARD_EXEMPT);
     }
 
@@ -47,7 +53,8 @@ public class EntityHazardEngine {
      * @param activeZone the zone the entity is currently in, or {@code null} if in safe air
      * @return the updated state; {@link EntityAirState#ZERO} when safe or debt fully cleared
      */
-    public static EntityAirState tickAirDebt(LivingEntity entity, EntityAirState state, ZoneDefinition activeZone) {
+    public static EntityAirState tickAirDebt(LivingEntity entity, EntityAirState state,
+                                              ZoneDefinition activeZone, AtmosphereSettings cfg) {
         if (activeZone == null) return EntityAirState.ZERO;
         int maxAir = entity.getMaxAirSupply();
         float rate = (float) maxAir / (activeZone.hazardTimeSecs() * 20f);
@@ -56,8 +63,9 @@ public class EntityHazardEngine {
         acc -= units;
         int newDebt = Math.min(state.airDebt() + units, maxAir);
         int newSuff = newDebt >= maxAir ? state.suffocationTicks() + 1 : 0;
-        if (newDebt >= maxAir && newSuff % 20 == 0) {
-            entity.hurt(MiasmaDamageTypes.miasma(entity), 2.0f);
+        int interval = MiasmaDamageTypes.toIntervalTicks(cfg.rampIntervalTier1Secs());
+        if (newDebt >= maxAir && newSuff % interval == 0) {
+            entity.hurt(MiasmaDamageTypes.miasma(entity), cfg.rampDamageTier1());
         }
         return new EntityAirState(newDebt, acc, newSuff);
     }

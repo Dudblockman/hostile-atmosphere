@@ -87,7 +87,7 @@ public final class ModifierCommand {
                                             int key = IntegerArgumentType.getInteger(ctx, "key");
                                             AtmosphereModifier prev = AtmosphereProgressionData
                                                     .get(ctx.getSource().getServer()).getModifiers().get(key);
-                                            double fromValue = prev != null ? prev.getCurrentValue(now) : 0.0;
+                                            double fromValue = prev != null ? prev.source().get(now) : 0.0;
                                             return addModifier(ctx.getSource(), key,
                                                     StringArgumentType.getString(ctx, "target"), op,
                                                     new ValueSource.Constant(fromValue,
@@ -178,7 +178,7 @@ public final class ModifierCommand {
                 String.format("[HA] global=%.2f  modifiers(%d):", level, mods.size()));
         mods.forEach((key, mod) -> sb.append(String.format("\n  [%d] %-5s (%s) | %s | now=%.2f",
                 key, mod.operation().getSerializedName(), mod.target(),
-                describe(mod.source()), mod.getCurrentValue(tick))));
+                describe(mod.source()), mod.source().get(tick))));
         src.sendSuccess(() -> Component.literal(sb.toString()), false);
         return mods.size();
     }
@@ -208,7 +208,7 @@ public final class ModifierCommand {
             if (!t.equals("all") && !t.equals(target)) return;
             sb.append(String.format("\n  [%d] %-6s (%s) | %s | now=%.2f",
                     key, mod.operation().getSerializedName(), t,
-                    describe(mod.source()), mod.getCurrentValue(tick)));
+                    describe(mod.source()), mod.source().get(tick)));
             count[0]++;
         });
 

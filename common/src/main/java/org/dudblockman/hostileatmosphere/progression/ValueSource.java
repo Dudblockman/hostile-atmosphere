@@ -94,6 +94,7 @@ public interface ValueSource {
             double fp     = fromPeriodTicks <= 0 ? periodTicks : fromPeriodTicks;
             double period = fp + (periodTicks - fp) * t;
             double phase  = fromPhaseTicks + (phaseTicks - fromPhaseTicks) * t;
+            if (period == 0.0) return 0.0;
             return amp * Math.sin(2.0 * Math.PI * (tick - phase) / period);
         }
 
@@ -146,7 +147,8 @@ public interface ValueSource {
             double t   = tweenTicks <= 0 ? 1.0
                     : Mth.clamp((double) (tick - startTick) / tweenTicks, 0.0, 1.0);
             double amp = fromAmplitude + (amplitude - fromAmplitude) * t;
-            double raw = amp * noise().noise(x * xzScale, (double) tick / timeTicks, z * xzScale);
+            double timeCoord = timeTicks == 0.0 ? 0.0 : (double) tick / timeTicks;
+            double raw = amp * noise().noise(x * xzScale, timeCoord, z * xzScale);
             return Mth.clamp(raw, -Math.abs(amp), Math.abs(amp));
         }
 

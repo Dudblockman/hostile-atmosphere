@@ -1,14 +1,10 @@
 package org.dudblockman.hostileatmosphere.events;
 
-import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.OnDatapackSyncEvent;
@@ -21,17 +17,19 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.client.AtmosphereClientData;
 import org.dudblockman.hostileatmosphere.compat.CreateCompat;
-import org.dudblockman.hostileatmosphere.compat.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.engine.AtmosphereEngine;
+import org.dudblockman.hostileatmosphere.command.CeilingGridDebug;
+import org.dudblockman.hostileatmosphere.engine.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.network.SyncAirDebtPayload;
 import org.dudblockman.hostileatmosphere.network.SyncDivingActivePayload;
 import org.dudblockman.hostileatmosphere.network.SyncToxinPayload;
 import org.dudblockman.hostileatmosphere.network.SyncZoneSeverityPayload;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
+import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 import org.dudblockman.hostileatmosphere.registry.ModAttachments;
 
 import java.util.List;
@@ -43,21 +41,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AtmosphereEventHandler {
 
     /**
-     * Tracks last sent zone state per player to avoid redundant packets.
-     * int[0] = severity*2 + (approaching?1:0), int[1] = zoneCeilingY, int[2] = zoneFloorY.
+     * Per-player session state tracked to avoid redundant packets and for retroactive drain accounting.
+     * lastZoneState: null = not yet sent; int[0] = severity*2+(approaching?1:0), int[1]=ceilingY, int[2]=floorY.
      * Ceiling and floor are included so Perlin-noise-driven boundary shifts trigger a resend.
+     * backtankDebtDrain: fractional backtank units owed from retroactive debt-recovery drain, pending consumption.
      */
-    private static final Map<UUID, int[]>   lastZoneState     = new ConcurrentHashMap<>();
-    private static final Map<UUID, Boolean> lastDivingState   = new ConcurrentHashMap<>();
-    /** Fractional backtank units owed from retroactive debt-recovery drain, pending consumption. */
-    private static final Map<UUID, Float>   backtankDebtDrain = new ConcurrentHashMap<>();
+    private static final Map<UUID, PlayerSessionState> sessionStates = new ConcurrentHashMap<>();
 
-    public static Map<ResourceLocation, List<ZoneDefinition>> getCachedZones()   { return ZoneLookup.getCachedZones(); }
-    public static Map<ResourceLocation, List<String>>         getCachedZoneIds() { return ZoneLookup.getCachedZoneIds(); }
+    private static PlayerSessionState session(UUID id) {
+        return sessionStates.computeIfAbsent(id, k -> new PlayerSessionState());
+    }
 
-    /** Enables (radius > 0) or disables (radius == 0) the ceiling particle grid for the source player. */
-    public static int toggleParticleGrid(CommandSourceStack src, int radius) {
-        return CeilingGridDebug.toggleGrid(src, radius);
+    private static final class PlayerSessionState {
+        int[] lastZoneState;
+        boolean lastDivingState;
+        float backtankDebtDrain;
     }
 
     private static int computeFatigueAmp(int toxinLevel, AtmosphereSettings cfg) {
@@ -73,19 +71,7 @@ public class AtmosphereEventHandler {
         // because serverTick() needs zone-to-dimension mapping that isn't plumbed through yet.
         AtmosphereProgressionData.get(server).serverTick(overworld, tick);
 
-        // Tick ValueSource instances embedded in datapack zone ceiling pipelines.
-        // These are not stored in AtmosphereProgressionData so they must be ticked separately.
-        // Without this, PredicateSource instances in zone ceiling layers stay at multiplier=0.0 permanently.
-        for (Map.Entry<ResourceLocation, List<ZoneDefinition>> entry : ZoneLookup.getCachedZones().entrySet()) {
-            ResourceKey<Level> dimKey = ResourceKey.create(Registries.DIMENSION, entry.getKey());
-            ServerLevel dimLevel = server.getLevel(dimKey);
-            if (dimLevel == null) dimLevel = overworld;
-            for (ZoneDefinition zone : entry.getValue()) {
-                for (ZoneDefinition.CeilingLayer layer : zone.ceiling()) {
-                    layer.source().serverTick(dimLevel, tick);
-                }
-            }
-        }
+        ZoneLookup.tickAllZoneSources(server, tick);
     }
 
     @SubscribeEvent
@@ -138,8 +124,9 @@ public class AtmosphereEventHandler {
         boolean divingActive = (protection == ProtectionLevel.SEALED || protection == ProtectionLevel.RESPIRATOR)
                 && activeZone != null;
 
-        if (divingActive != lastDivingState.getOrDefault(player.getUUID(), false)) {
-            lastDivingState.put(player.getUUID(), divingActive);
+        PlayerSessionState state = session(player.getUUID());
+        if (divingActive != state.lastDivingState) {
+            state.lastDivingState = divingActive;
             PacketDistributor.sendToPlayer(player, new SyncDivingActivePayload(divingActive));
         }
 
@@ -151,9 +138,9 @@ public class AtmosphereEventHandler {
             int debtRecovered = oldDebt - data.getAirDebt();
             if (debtRecovered > 0 && activeZone != null && maxAir > 0) {
                 float drain = (float) debtRecovered / maxAir * activeZone.hazardTimeSecs();
-                float acc = backtankDebtDrain.getOrDefault(player.getUUID(), 0f) + drain;
+                float acc = state.backtankDebtDrain + drain;
                 int whole = (int) acc;
-                backtankDebtDrain.put(player.getUUID(), acc - whole);
+                state.backtankDebtDrain = acc - whole;
                 if (whole > 0) CreateCompat.drainBacktank(player, whole);
             }
             // Baseline drain: 1 unit/second for maintaining the seal while in the zone.
@@ -225,14 +212,15 @@ public class AtmosphereEventHandler {
         }
 
         // State key encodes intensity at 0.01 precision + approaching flag.
-        int stateKey = (int)(hazardIntensity * 100) * 2 + (approaching ? 1 : 0);
-        int[] last = lastZoneState.get(player.getUUID());
+        int stateKey = Math.round(hazardIntensity * 100) * 2 + (approaching ? 1 : 0);
+        PlayerSessionState zoneSession = session(player.getUUID());
+        int[] last = zoneSession.lastZoneState;
         boolean changed = last == null
                 || last[0] != stateKey
                 || Math.abs(last[1] - zoneCeilingY) > 1
                 || Math.abs(last[2] - zoneFloorY)   > 1;
         if (changed) {
-            lastZoneState.put(player.getUUID(), new int[]{stateKey, zoneCeilingY, zoneFloorY});
+            zoneSession.lastZoneState = new int[]{stateKey, zoneCeilingY, zoneFloorY};
             PacketDistributor.sendToPlayer(player, new SyncZoneSeverityPayload(hazardIntensity, approaching, zoneCeilingY, zoneFloorY));
         }
     }
@@ -240,9 +228,7 @@ public class AtmosphereEventHandler {
     @SubscribeEvent
     public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         UUID id = event.getEntity().getUUID();
-        lastZoneState.remove(id);
-        lastDivingState.remove(id);
-        backtankDebtDrain.remove(id);
+        sessionStates.remove(id);
         CeilingGridDebug.onPlayerLoggedOut(id);
     }
 
@@ -268,7 +254,7 @@ public class AtmosphereEventHandler {
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        lastZoneState.remove(player.getUUID()); // force re-sync on join
+        sessionStates.remove(player.getUUID()); // reset session state on join to force re-sync
         syncAll(player);
     }
 
@@ -276,16 +262,10 @@ public class AtmosphereEventHandler {
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         PlayerAtmosphereData data = player.getData(ModAttachments.ATMOSPHERE_DATA.get());
-        data.setAirDebt(0);
-        data.setDrainAccumulator(0f);
-        data.setRecoveryAccumulator(0f);
-        data.setSuffocationTicks(0);
         AtmosphereSettings cfg = AtmosphereConfig.getSettings();
-        if (cfg == null) { syncAll(player); return; }
-        int retainedToxin = Math.min(data.getToxinLevel(), cfg.toxinDeathCap());
-        data.setToxinLevel(retainedToxin);
-        data.setToxinAccumulator(0f);
-        data.setToxinRecoveryAccumulator(0f);
+        int retainedToxin = (cfg != null) ? Math.min(data.getToxinLevel(), cfg.toxinDeathCap()) : 0;
+        data.reset(retainedToxin);
+        sessionStates.remove(player.getUUID());
         syncAll(player);
     }
 
@@ -317,5 +297,6 @@ public class AtmosphereEventHandler {
         int fatigueAmp = (cfg != null) ? computeFatigueAmp(toxin, cfg) : -1;
         PacketDistributor.sendToPlayer(player, new SyncAirDebtPayload(data.getAirDebt()));
         PacketDistributor.sendToPlayer(player, new SyncToxinPayload(toxin, fatigueAmp));
+        PacketDistributor.sendToPlayer(player, new SyncDivingActivePayload(false));
     }
 }

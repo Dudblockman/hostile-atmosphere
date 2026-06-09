@@ -43,11 +43,4 @@ public record AtmosphereModifier(
             ).apply(instance, AtmosphereModifier::new)
     );
 
-    public double getCurrentValue(long tick) {
-        return source.get(tick);
-    }
-
-    public double getCurrentValue(long tick, double x, double z) {
-        return source.get(tick, x, z);
-    }
 }

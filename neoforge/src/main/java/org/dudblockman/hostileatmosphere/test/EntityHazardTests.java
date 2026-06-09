@@ -7,8 +7,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import org.dudblockman.hostileatmosphere.Constants;
+import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.config.EntityHazardSettings;
-import org.dudblockman.hostileatmosphere.engine.EntityAirState;
 import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 
@@ -18,15 +18,16 @@ public class EntityHazardTests {
 
     private static final String TEMPLATE = "empty_platform";
     private static final ResourceLocation OVERWORLD = ResourceLocation.fromNamespaceAndPath("minecraft", "overworld");
+    private static final AtmosphereSettings CFG = AtmosphereSettings.defaults();
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void airDebtAccumulatesInZone(GameTestHelper helper) {
         // hazardTimeSecs=1: rate = 300/20 = 15/tick; 10 ticks → debt = 150
         var cow = helper.spawnWithNoFreeWill(EntityType.COW, new BlockPos(2, 2, 2));
         ZoneDefinition zone = ZoneDefinition.ofConstant(OVERWORLD, 100, 1, 60);
-        EntityAirState state = EntityAirState.ZERO;
+        EntityHazardEngine.EntityAirState state = EntityHazardEngine.EntityAirState.ZERO;
         for (int i = 0; i < 10; i++) {
-            state = EntityHazardEngine.tickAirDebt(cow, state, zone);
+            state = EntityHazardEngine.tickAirDebt(cow, state, zone, CFG);
         }
         GameTestAssertions.assertEquals("airDebt after 10 ticks", 150, state.airDebt(), helper);
         helper.succeed();
@@ -37,9 +38,9 @@ public class EntityHazardTests {
         // hazardTimeSecs=1: full drain in 20 ticks; 25 ticks must cap at 300
         var cow = helper.spawnWithNoFreeWill(EntityType.COW, new BlockPos(2, 2, 2));
         ZoneDefinition zone = ZoneDefinition.ofConstant(OVERWORLD, 100, 1, 60);
-        EntityAirState state = EntityAirState.ZERO;
+        EntityHazardEngine.EntityAirState state = EntityHazardEngine.EntityAirState.ZERO;
         for (int i = 0; i < 25; i++) {
-            state = EntityHazardEngine.tickAirDebt(cow, state, zone);
+            state = EntityHazardEngine.tickAirDebt(cow, state, zone, CFG);
         }
         GameTestAssertions.assertEquals("airDebt capped at maxAir", cow.getMaxAirSupply(), state.airDebt(), helper);
         helper.succeed();
@@ -50,9 +51,9 @@ public class EntityHazardTests {
         // After 20 ticks at hazardTimeSecs=1, debt hits max and suffocationTicks begins counting
         var cow = helper.spawnWithNoFreeWill(EntityType.COW, new BlockPos(2, 2, 2));
         ZoneDefinition zone = ZoneDefinition.ofConstant(OVERWORLD, 100, 1, 60);
-        EntityAirState state = EntityAirState.ZERO;
+        EntityHazardEngine.EntityAirState state = EntityHazardEngine.EntityAirState.ZERO;
         for (int i = 0; i < 20; i++) {
-            state = EntityHazardEngine.tickAirDebt(cow, state, zone);
+            state = EntityHazardEngine.tickAirDebt(cow, state, zone, CFG);
         }
         GameTestAssertions.assertEquals("airDebt at max", cow.getMaxAirSupply(), state.airDebt(), helper);
         GameTestAssertions.assertTrue("suffocationTicks > 0 at max debt", state.suffocationTicks() > 0, helper);
@@ -63,9 +64,9 @@ public class EntityHazardTests {
     public static void stateIsZeroWhenOutOfZone(GameTestHelper helper) {
         // Debt clears instantly on zone exit (no recovery ramp for mobs)
         var cow = helper.spawnWithNoFreeWill(EntityType.COW, new BlockPos(2, 2, 2));
-        EntityAirState state = new EntityAirState(150, 0.5f, 3);
-        EntityAirState result = EntityHazardEngine.tickAirDebt(cow, state, null);
-        GameTestAssertions.assertTrue("out-of-zone returns ZERO", result == EntityAirState.ZERO, helper);
+        EntityHazardEngine.EntityAirState state = new EntityHazardEngine.EntityAirState(150, 0.5f, 3);
+        EntityHazardEngine.EntityAirState result = EntityHazardEngine.tickAirDebt(cow, state, null, CFG);
+        GameTestAssertions.assertTrue("out-of-zone returns ZERO", result == EntityHazardEngine.EntityAirState.ZERO, helper);
         helper.succeed();
     }
 

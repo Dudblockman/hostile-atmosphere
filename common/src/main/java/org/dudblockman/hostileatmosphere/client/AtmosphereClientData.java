@@ -102,7 +102,7 @@ public final class AtmosphereClientData {
 
     /** Effective Y floor of the active zone; {@link Integer#MAX_VALUE} when not in a zone. */
     public static void setZoneFloorY(UUID id, int floorY) {
-        if (floorY == Integer.MAX_VALUE) ZONE_FLOOR_Y.remove(id);
+        if (floorY == Integer.MAX_VALUE || floorY == Integer.MIN_VALUE) ZONE_FLOOR_Y.remove(id);
         else ZONE_FLOOR_Y.put(id, floorY);
     }
 

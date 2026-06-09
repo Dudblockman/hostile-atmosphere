@@ -16,7 +16,6 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 import org.dudblockman.hostileatmosphere.Constants;
-import org.dudblockman.hostileatmosphere.compat.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
@@ -59,9 +58,13 @@ public class AtmosphereEngine {
     public static ZoneDefinition findZone(List<ZoneDefinition> zones, List<String> zoneIds,
                                           long tick, double x, double eyeY, double z,
                                           BiFunction<String, Double, Double> effectiveCeiling) {
+        if (zones.size() != zoneIds.size())
+            throw new IllegalArgumentException(
+                "zones and zoneIds must be parallel lists of equal size: "
+                + zones.size() + " vs " + zoneIds.size());
         for (int i = 0; i < zones.size(); i++) {
             double base = zones.get(i).evalCeiling(tick, x, z);
-            String id   = i < zoneIds.size() ? zoneIds.get(i) : "all";
+            String id   = zoneIds.get(i);
             double ceil = effectiveCeiling.apply(id, base);
             if (!Double.isNaN(ceil) && eyeY <= ceil) return zones.get(i);
         }
@@ -165,7 +168,7 @@ public class AtmosphereEngine {
         syncModifier(toxinInst, ID_TOXIN_PROTECTION, protection == ProtectionLevel.SEALED ? -1.0 : Double.NaN);
         syncModifier(toxinInst, ID_TOXIN_EXPEDITION, protection == ProtectionLevel.RESPIRATOR ? cfg.expeditionToxinMultiplier() - 1.0 : Double.NaN);
         syncModifier(toxinInst, ID_TOXIN_UNDERWATER, inWater ? underwaterToxinMult(player, protection, cfg) - 1.0 : Double.NaN);
-        syncModifier(toxinInst, ID_TOXIN_RAIN,       cfg.rainToxinMultiplierEnabled() && player.level().isRaining() && player.isInWater() ? cfg.rainToxinMultiplier() - 1.0 : Double.NaN);
+        syncModifier(toxinInst, ID_TOXIN_RAIN,       cfg.rainToxinMultiplierEnabled() && (player.level().isRainingAt(player.blockPosition()) || (player.level().isRaining() && player.isInWater())) ? cfg.rainToxinMultiplier() - 1.0 : Double.NaN);
     }
 
     private static void syncModifier(AttributeInstance inst, ResourceLocation id, double desired) {
@@ -265,7 +268,7 @@ public class AtmosphereEngine {
             interval = MiasmaDamageTypes.toIntervalTicks(cfg.rampIntervalTier1Secs());
         }
 
-        if (player.tickCount % interval == 0) {
+        if (suff % interval == 0) {
             DamageSource source = (suff >= tier3)
                     ? MiasmaDamageTypes.miasmaIntense(player)
                     : MiasmaDamageTypes.miasma(player);

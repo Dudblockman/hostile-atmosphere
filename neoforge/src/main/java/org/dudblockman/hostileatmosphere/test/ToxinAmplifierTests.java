@@ -83,7 +83,6 @@ public class ToxinAmplifierTests {
         if (actual != expectedAmp) {
             String msg = String.format("getToxinAmplifier(%d): expected amp %d but was %d", toxin, expectedAmp, actual);
             helper.fail(msg);
-            throw new AssertionError(msg);
         }
     }
 }

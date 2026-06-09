@@ -36,4 +36,14 @@ public record AtmosphereSettings(
         Holder<MobEffect> toxicityEffect,
         Holder<Attribute> airDrainRate,
         Holder<Attribute> toxinRate
-) {}
+) {
+    /** Default settings mirroring the shipped config file values, for use in tests. */
+    public static AtmosphereSettings defaults() {
+        return new AtmosphereSettings(
+                30, 3, 10, 30, 1f, 2f, 4f, 1f, 0.75f, 0.5f,
+                14400, 250, 500, 750, 950, 500,
+                false, 1.5f,
+                0.6f, 0.6f, false, 0f, 0f, 0.5f,
+                null, null, null);
+    }
+}

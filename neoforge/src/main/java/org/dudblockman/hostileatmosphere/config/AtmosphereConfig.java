@@ -5,7 +5,9 @@ import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.registry.ModAttributes;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
 
-public class AtmosphereConfig {
+public final class AtmosphereConfig {
+
+    private AtmosphereConfig() {}
 
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
@@ -202,20 +204,16 @@ public class AtmosphereConfig {
         SPEC = BUILDER.build();
     }
 
-    private static volatile AtmosphereSettings cachedSettings;
-    private static volatile EntityHazardSettings cachedEntityHazardSettings;
+    private static volatile AtmosphereSettings settings;
+    private static volatile EntityHazardSettings entityHazardSettings;
 
-    public static AtmosphereSettings getSettings() {
-        return cachedSettings;
-    }
+    public static AtmosphereSettings getSettings() { return settings; }
 
-    public static EntityHazardSettings getEntityHazardSettings() {
-        return cachedEntityHazardSettings;
-    }
+    public static EntityHazardSettings getEntityHazardSettings() { return entityHazardSettings; }
 
     public static void cacheSettings() {
-        cachedSettings = read();
-        cachedEntityHazardSettings = readEntityHazard();
+        settings = read();
+        entityHazardSettings = readEntityHazard();
     }
 
     private static EntityHazardSettings readEntityHazard() {
