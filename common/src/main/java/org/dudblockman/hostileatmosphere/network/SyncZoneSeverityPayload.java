@@ -8,21 +8,12 @@ import net.minecraft.resources.ResourceLocation;
 import org.dudblockman.hostileatmosphere.Constants;
 
 /**
- * Syncs the data the client needs to scale particles to actual zone hazard intensity.
- *
- * <ul>
- *   <li>{@code hazardIntensity} — 0.0 = safe/approaching; in-zone = {@code leastSevereTimeSecs / thisZoneTimeSecs},
- *       so the mildest registered zone is always 1.0 and more severe zones scale proportionally from zone data</li>
- *   <li>{@code approaching}    — true when safe but within 15 blocks above the nearest zone ceiling</li>
- *   <li>{@code zoneCeilingY}   — effective Y ceiling of the active/approaching zone; {@link Integer#MAX_VALUE} if neither</li>
- *   <li>{@code zoneFloorY}     — effective Y floor of the active zone; {@link Integer#MAX_VALUE} if not in zone</li>
- * </ul>
- *
- * The client derives particle rate from {@code hazardIntensity} × a base constant, so data-pack
- * zones with custom {@code hazardTimeSecs} values automatically get appropriate particle density
- * without any hardcoded per-zone values on the client.
+ /**
+ * Syncs zone hazard intensity to the client for particle scaling.
+ * {@code hazardIntensity}: 0.0 when safe; in-zone = {@code leastSevereTimeSecs / thisZoneTimeSecs},
+ * so the mildest registered zone is always 1.0 and more severe zones scale proportionally.
  */
-public record SyncZoneSeverityPayload(float hazardIntensity, boolean approaching, int zoneCeilingY, int zoneFloorY)
+public record SyncZoneSeverityPayload(float hazardIntensity)
         implements CustomPacketPayload {
 
     public static final Type<SyncZoneSeverityPayload> TYPE =
@@ -30,9 +21,6 @@ public record SyncZoneSeverityPayload(float hazardIntensity, boolean approaching
 
     public static final StreamCodec<ByteBuf, SyncZoneSeverityPayload> CODEC = StreamCodec.composite(
             ByteBufCodecs.FLOAT, SyncZoneSeverityPayload::hazardIntensity,
-            ByteBufCodecs.BOOL,  SyncZoneSeverityPayload::approaching,
-            ByteBufCodecs.INT,   SyncZoneSeverityPayload::zoneCeilingY,
-            ByteBufCodecs.INT,   SyncZoneSeverityPayload::zoneFloorY,
             SyncZoneSeverityPayload::new);
 
     @Override

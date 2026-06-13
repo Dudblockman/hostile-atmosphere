@@ -28,8 +28,5 @@ public final class PacketHandlers {
 
     public static void onZoneSeverity(SyncZoneSeverityPayload payload, UUID playerId) {
         AtmosphereClientData.setHazardIntensity(playerId, payload.hazardIntensity());
-        AtmosphereClientData.setApproachingHazard(playerId, payload.approaching());
-        AtmosphereClientData.setZoneCeilingY(playerId, payload.zoneCeilingY());
-        AtmosphereClientData.setZoneFloorY(playerId, payload.zoneFloorY());
     }
 }

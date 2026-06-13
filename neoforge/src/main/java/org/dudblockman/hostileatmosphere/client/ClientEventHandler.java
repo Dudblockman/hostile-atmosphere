@@ -54,11 +54,7 @@ public class ClientEventHandler {
                         && localPlayer.getHealth() + localPlayer.getAbsorptionAmount() > 4.0F;
             }
 
-            float intensity = AtmosphereClientData.getHazardIntensity(localPlayer.getUUID());
-            boolean near    = AtmosphereClientData.isApproachingHazard(localPlayer.getUUID());
-            int ceilingY    = AtmosphereClientData.getZoneCeilingY(localPlayer.getUUID());
-            int floorY      = AtmosphereClientData.getZoneFloorY(localPlayer.getUUID());
-            AtmosphereParticles.spawn(localPlayer, intensity, near, ceilingY, floorY);
+            AtmosphereParticles.spawn(localPlayer, AtmosphereClientData.getHazardIntensity(localPlayer.getUUID()));
             AtmosphereClientData.setForceHeartWiggle(wiggle);
         }
     }

@@ -63,12 +63,10 @@ public final class AtmosphereClientData {
 
     /**
      * Data-driven intensity: {@code leastSevereTimeSecs / thisZoneTimeSecs}.
-     * 0.0 = safe or approaching; 1.0 = mildest registered zone; higher = more severe.
+     * 0.0 = safe; 1.0 = mildest registered zone; higher = more severe.
      * Scales automatically when data packs add or modify zones.
      */
-    private static final Map<UUID, Float>   HAZARD_INTENSITY = new ConcurrentHashMap<>();
-    private static final Map<UUID, Boolean> APPROACHING      = new ConcurrentHashMap<>();
-    private static final Map<UUID, Integer> ZONE_CEILING_Y   = new ConcurrentHashMap<>();
+    private static final Map<UUID, Float> HAZARD_INTENSITY = new ConcurrentHashMap<>();
 
     public static void setHazardIntensity(UUID id, float intensity) {
         if (intensity <= 0.0f) HAZARD_INTENSITY.remove(id);
@@ -77,37 +75,6 @@ public final class AtmosphereClientData {
 
     public static float getHazardIntensity(UUID id) {
         return HAZARD_INTENSITY.getOrDefault(id, 0.0f);
-    }
-
-    public static void setApproachingHazard(UUID id, boolean approaching) {
-        if (!approaching) APPROACHING.remove(id);
-        else APPROACHING.put(id, true);
-    }
-
-    public static boolean isApproachingHazard(UUID id) {
-        return APPROACHING.getOrDefault(id, false);
-    }
-
-    /** Effective Y ceiling of the active or approaching zone; {@link Integer#MAX_VALUE} when not applicable. */
-    public static void setZoneCeilingY(UUID id, int ceilingY) {
-        if (ceilingY == Integer.MAX_VALUE) ZONE_CEILING_Y.remove(id);
-        else ZONE_CEILING_Y.put(id, ceilingY);
-    }
-
-    public static int getZoneCeilingY(UUID id) {
-        return ZONE_CEILING_Y.getOrDefault(id, Integer.MAX_VALUE);
-    }
-
-    private static final Map<UUID, Integer> ZONE_FLOOR_Y = new ConcurrentHashMap<>();
-
-    /** Effective Y floor of the active zone; {@link Integer#MAX_VALUE} when not in a zone. */
-    public static void setZoneFloorY(UUID id, int floorY) {
-        if (floorY == Integer.MAX_VALUE || floorY == Integer.MIN_VALUE) ZONE_FLOOR_Y.remove(id);
-        else ZONE_FLOOR_Y.put(id, floorY);
-    }
-
-    public static int getZoneFloorY(UUID id) {
-        return ZONE_FLOOR_Y.getOrDefault(id, Integer.MAX_VALUE);
     }
 
     // -----------------------------------------------------------------------------------------

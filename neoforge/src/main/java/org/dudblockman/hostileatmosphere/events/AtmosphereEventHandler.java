@@ -42,8 +42,7 @@ public class AtmosphereEventHandler {
 
     /**
      * Per-player session state tracked to avoid redundant packets and for retroactive drain accounting.
-     * lastZoneState: null = not yet sent; int[0] = severity*2+(approaching?1:0), int[1]=ceilingY, int[2]=floorY.
-     * Ceiling and floor are included so Perlin-noise-driven boundary shifts trigger a resend.
+     * lastZoneState: null = not yet sent; int[0] = severity*100.
      * backtankDebtDrain: fractional backtank units owed from retroactive debt-recovery drain, pending consumption.
      */
     private static final Map<UUID, PlayerSessionState> sessionStates = new ConcurrentHashMap<>();
@@ -106,7 +105,7 @@ public class AtmosphereEventHandler {
 
         // Creative and spectator skip hazard logic but still get zone sync so particles are visible.
         if (player.isCreative() || player.isSpectator()) {
-            syncZoneSeverity(player, activeZone, progression, gameTick, px, pz, zones, ids);
+            syncZoneSeverity(player, activeZone, zones);
             return;
         }
 
@@ -156,72 +155,27 @@ public class AtmosphereEventHandler {
         if (newToxin != oldToxin) PacketDistributor.sendToPlayer(player,
                 new SyncToxinPayload(newToxin, computeFatigueAmp(newToxin, cfg)));
 
-        syncZoneSeverity(player, activeZone, progression, gameTick, px, pz, zones, ids);
+        syncZoneSeverity(player, activeZone, zones);
     }
 
     private static void syncZoneSeverity(ServerPlayer player, ZoneDefinition activeZone,
-            AtmosphereProgressionData progression, long gameTick, double px, double pz,
-            List<ZoneDefinition> zones, List<String> ids) {
-        // hazardIntensity = leastSevereTimeSecs / thisZoneTimeSecs.
-        // Mildest registered zone → 1.0; more severe zones → proportionally higher.
-        // 0.0 when safe or approaching (approaching handled separately below).
+            List<ZoneDefinition> zones) {
         float hazardIntensity = 0.0f;
-        int zoneCeilingY = Integer.MAX_VALUE;
-        int zoneFloorY   = Integer.MAX_VALUE;
-
         if (activeZone != null) {
             int idx = zones.indexOf(activeZone);
             if (idx >= 0) {
                 int leastSevereTimeSecs = ZoneLookup.getLeastSevereSecsForDim(
                         player.level().dimension().location(), activeZone.hazardTimeSecs());
                 hazardIntensity = (float) leastSevereTimeSecs / activeZone.hazardTimeSecs();
-
-                zoneCeilingY = (int) Math.round(
-                        progression.getEffectiveCeiling(gameTick, px, pz, ids.get(idx), activeZone.evalCeiling(gameTick, px, pz)));
-                // Floor = effective ceiling of the next more-severe zone, or 32 blocks below for the deepest.
-                if (idx > 0) {
-                    zoneFloorY = (int) Math.round(progression.getEffectiveCeiling(
-                            gameTick, px, pz, ids.get(idx - 1), zones.get(idx - 1).evalCeiling(gameTick, px, pz)));
-                } else {
-                    zoneFloorY = Integer.MIN_VALUE;
-                }
             }
         }
 
-        // Approaching: safe but within 15 blocks above the nearest zone ceiling.
-        boolean approaching = false;
-        if (hazardIntensity == 0.0f) {
-            double eyeY = player.getEyeY();
-            double bestGap = Double.MAX_VALUE;
-            double bestCeiling = Double.NaN;
-            for (int i = 0; i < zones.size(); i++) {
-                double effectiveCeiling = progression.getEffectiveCeiling(
-                        gameTick, px, pz, ids.get(i), zones.get(i).evalCeiling(gameTick, px, pz));
-                if (Double.isNaN(effectiveCeiling)) continue;
-                double gap = eyeY - effectiveCeiling;
-                if (gap > 0 && gap <= 15.0 && gap < bestGap) {
-                    bestGap = gap;
-                    bestCeiling = effectiveCeiling;
-                }
-            }
-            if (!Double.isNaN(bestCeiling)) {
-                approaching = true;
-                zoneCeilingY = (int) Math.round(bestCeiling);
-                zoneFloorY   = zoneCeilingY;
-            }
-        }
-
-        // State key encodes intensity at 0.01 precision + approaching flag.
-        int stateKey = Math.round(hazardIntensity * 100) * 2 + (approaching ? 1 : 0);
+        int stateKey = Math.round(hazardIntensity * 100);
         PlayerSessionState zoneSession = session(player.getUUID());
         int[] last = zoneSession.lastZoneState;
-        boolean changed = last == null
-                || last[0] != stateKey
-                || Math.abs(last[1] - zoneCeilingY) > 1
-                || Math.abs(last[2] - zoneFloorY)   > 1;
-        if (changed) {
-            zoneSession.lastZoneState = new int[]{stateKey, zoneCeilingY, zoneFloorY};
-            PacketDistributor.sendToPlayer(player, new SyncZoneSeverityPayload(hazardIntensity, approaching, zoneCeilingY, zoneFloorY));
+        if (last == null || last[0] != stateKey) {
+            zoneSession.lastZoneState = new int[]{stateKey};
+            PacketDistributor.sendToPlayer(player, new SyncZoneSeverityPayload(hazardIntensity));
         }
     }
 
