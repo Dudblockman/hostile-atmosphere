@@ -6,9 +6,11 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import org.dudblockman.hostileatmosphere.Constants;
@@ -55,6 +57,14 @@ public class EntityHazardEventHandler {
         } else {
             entityAirState.put(living, next);
         }
+    }
+
+    @SubscribeEvent
+    public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
+        if (event.getLevel().isClientSide()) return;
+        if (!(event.getEntity() instanceof Mob mob)) return;
+        if (!EntityHazardEngine.isSubjectToHazard(mob.getType())) return;
+        mob.goalSelector.addGoal(2, new FleeHazardGoal(mob));
     }
 
     @SubscribeEvent

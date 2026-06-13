@@ -4,7 +4,8 @@
   "package": "org.dudblockman.hostileatmosphere.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "BacktankBlockEntityMixin"
+    "BacktankBlockEntityMixin",
+    "WalkNodeEvaluatorMixin"
   ],
   "client": [],
   "server": [],
