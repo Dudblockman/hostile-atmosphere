@@ -8,7 +8,6 @@ import net.minecraft.world.entity.EntityType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
-import org.dudblockman.hostileatmosphere.config.EntityHazardSettings;
 import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 
@@ -72,7 +71,7 @@ public class EntityHazardTests {
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void damageDisabledWhenMasterOff(GameTestHelper helper) {
-        EntityHazardSettings cfg = settings(false, true, true, true, true);
+        AtmosphereSettings.EntityHazardSettings cfg = settings(false, true, true, true, true);
         GameTestAssertions.assertTrue("isDamageEnabled returns false when master off",
                 !EntityHazardEngine.isDamageEnabled(EntityType.COW, cfg), helper);
         GameTestAssertions.assertTrue("isSuppressEnabled returns false when master off",
@@ -82,7 +81,7 @@ public class EntityHazardTests {
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void damagePassiveOnByDefault(GameTestHelper helper) {
-        EntityHazardSettings cfg = defaultSettings();
+        AtmosphereSettings.EntityHazardSettings cfg = defaultSettings();
         GameTestAssertions.assertTrue("enabled default true", cfg.enabled(), helper);
         GameTestAssertions.assertTrue("damagePassive default true", cfg.damagePassive(), helper);
         GameTestAssertions.assertTrue("damageHostile default false", !cfg.damageHostile(), helper);
@@ -92,7 +91,7 @@ public class EntityHazardTests {
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void suppressPassiveOnByDefault(GameTestHelper helper) {
-        EntityHazardSettings cfg = defaultSettings();
+        AtmosphereSettings.EntityHazardSettings cfg = defaultSettings();
         GameTestAssertions.assertTrue("suppressPassive default true", cfg.suppressPassive(), helper);
         GameTestAssertions.assertTrue("suppressNpc default true", cfg.suppressNpc(), helper);
         helper.succeed();
@@ -100,7 +99,7 @@ public class EntityHazardTests {
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void suppressHostileOffByDefault(GameTestHelper helper) {
-        EntityHazardSettings cfg = defaultSettings();
+        AtmosphereSettings.EntityHazardSettings cfg = defaultSettings();
         GameTestAssertions.assertTrue("suppressHostile default false", !cfg.suppressHostile(), helper);
         GameTestAssertions.assertTrue("suppressAquatic default false", !cfg.suppressAquatic(), helper);
         helper.succeed();
@@ -109,17 +108,17 @@ public class EntityHazardTests {
     // ------------------------------------------------------------------------------------------
 
     /** Default settings as shipped (master on, passive damage on, passive+npc suppression on). */
-    private static EntityHazardSettings defaultSettings() {
-        return new EntityHazardSettings(
+    private static AtmosphereSettings.EntityHazardSettings defaultSettings() {
+        return new AtmosphereSettings.EntityHazardSettings(
                 true, true, false, false, false,
                 true, false, false, true);
     }
 
     /** Settings with the given master toggle; suppression flags at defaults (passive+npc=true). */
-    private static EntityHazardSettings settings(boolean enabled,
+    private static AtmosphereSettings.EntityHazardSettings settings(boolean enabled,
             boolean damagePassive, boolean damageHostile,
             boolean damageAquatic, boolean damageNpc) {
-        return new EntityHazardSettings(
+        return new AtmosphereSettings.EntityHazardSettings(
                 enabled, damagePassive, damageHostile, damageAquatic, damageNpc,
                 true, false, false, true);
     }

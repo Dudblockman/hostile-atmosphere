@@ -1,23 +1,15 @@
 package org.dudblockman.hostileatmosphere.events;
 
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.OnDatapackSyncEvent;
-import net.neoforged.neoforge.event.entity.living.LivingBreatheEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.dudblockman.hostileatmosphere.Constants;
-import org.dudblockman.hostileatmosphere.client.AtmosphereClientData;
 import org.dudblockman.hostileatmosphere.compat.CreateCompat;
-import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.engine.AtmosphereEngine;
@@ -28,6 +20,7 @@ import org.dudblockman.hostileatmosphere.network.SyncDivingActivePayload;
 import org.dudblockman.hostileatmosphere.network.SyncToxinPayload;
 import org.dudblockman.hostileatmosphere.network.SyncZoneSeverityPayload;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
+import org.dudblockman.hostileatmosphere.progression.ZoneCacheManager;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 import org.dudblockman.hostileatmosphere.registry.ModAttachments;
@@ -42,7 +35,7 @@ public class AtmosphereEventHandler {
 
     /**
      * Per-player session state tracked to avoid redundant packets and for retroactive drain accounting.
-     * lastZoneState: null = not yet sent; int[0] = severity*100.
+     * lastHazardKey / lastOffsetKey: MIN_VALUE = not yet sent (forces first-tick sync).
      * backtankDebtDrain: fractional backtank units owed from retroactive debt-recovery drain, pending consumption.
      */
     private static final Map<UUID, PlayerSessionState> sessionStates = new ConcurrentHashMap<>();
@@ -52,7 +45,9 @@ public class AtmosphereEventHandler {
     }
 
     private static final class PlayerSessionState {
-        int[] lastZoneState;
+        int lastHazardKey      = Integer.MIN_VALUE;
+        int lastOffsetKey      = Integer.MIN_VALUE;
+        int lastFloorOffsetKey = Integer.MIN_VALUE;
         boolean lastDivingState;
         float backtankDebtDrain;
     }
@@ -62,50 +57,27 @@ public class AtmosphereEventHandler {
     }
 
     @SubscribeEvent
-    public static void onServerTick(ServerTickEvent.Pre event) {
-        MinecraftServer server = event.getServer();
-        ServerLevel overworld = server.overworld();
-        long tick = overworld.getGameTime();
-        // PredicateSource evaluates predicates against the overworld regardless of zone dimension
-        // because serverTick() needs zone-to-dimension mapping that isn't plumbed through yet.
-        AtmosphereProgressionData.get(server).serverTick(overworld, tick);
-
-        ZoneLookup.tickAllZoneSources(server, tick);
-    }
-
-    @SubscribeEvent
-    public static void onServerStarted(ServerStartedEvent event) {
-        ZoneLookup.rebuildZoneCache(event.getServer());
-    }
-
-    @SubscribeEvent
-    public static void onDatapackSync(OnDatapackSyncEvent event) {
-        ZoneLookup.rebuildZoneCache(event.getPlayerList().getServer());
-    }
-
-    @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         var entity = event.getEntity();
         if (entity.level().isClientSide()) return;
         if (!(entity instanceof ServerPlayer player)) return;
 
-        ResourceLocation dim = player.level().dimension().location();
-        List<ZoneDefinition> zones = ZoneLookup.getZonesForDim(dim);
-        List<String>         ids   = ZoneLookup.getIdsForDim(dim);
-
-        long   gameTick  = player.level().getGameTime();
+        ServerLevel serverLevel = (ServerLevel) player.level();
+        ResourceLocation dim = serverLevel.dimension().location();
+        List<ZoneDefinition> zones = ZoneCacheManager.getZonesForDim(dim);
+        List<String>         ids   = ZoneCacheManager.getIdsForDim(dim);
+        long   gameTick = serverLevel.getGameTime();
         double px = player.getX(), pz = player.getZ();
         AtmosphereProgressionData progression = AtmosphereProgressionData.get(player.getServer());
 
-        ZoneDefinition activeZone = AtmosphereEngine.findZone(
-                zones, ids, gameTick, px, player.getEyeY(), pz,
-                (zoneId, base) -> progression.getEffectiveCeiling(gameTick, px, pz, zoneId, base));
+        ZoneLookup.ZoneAndCeiling zoneResult = ZoneLookup.findZoneAndFloor(serverLevel, px, player.getEyeY(), pz);
+        ZoneDefinition activeZone = zoneResult != null ? zoneResult.zone().def() : null;
 
         CeilingGridDebug.renderForPlayer(player, zones, ids, gameTick, px, pz, progression);
 
         // Creative and spectator skip hazard logic but still get zone sync so particles are visible.
         if (player.isCreative() || player.isSpectator()) {
-            syncZoneSeverity(player, activeZone, zones);
+            syncZoneSeverity(player, zoneResult, gameTick, px, pz);
             return;
         }
 
@@ -114,7 +86,7 @@ public class AtmosphereEventHandler {
         int oldDebt  = data.getAirDebt();
         int oldToxin = data.getToxinLevel();
 
-        var cfg        = AtmosphereConfig.getSettings();
+        AtmosphereSettings cfg = AtmosphereSettings.getSettings();
         if (cfg == null) return;
         var protection = CreateCompat.getProtection(player);
 
@@ -155,27 +127,36 @@ public class AtmosphereEventHandler {
         if (newToxin != oldToxin) PacketDistributor.sendToPlayer(player,
                 new SyncToxinPayload(newToxin, computeFatigueAmp(newToxin, cfg)));
 
-        syncZoneSeverity(player, activeZone, zones);
+        syncZoneSeverity(player, zoneResult, gameTick, px, pz);
     }
 
-    private static void syncZoneSeverity(ServerPlayer player, ZoneDefinition activeZone,
-            List<ZoneDefinition> zones) {
-        float hazardIntensity = 0.0f;
-        if (activeZone != null) {
-            int idx = zones.indexOf(activeZone);
-            if (idx >= 0) {
-                int leastSevereTimeSecs = ZoneLookup.getLeastSevereSecsForDim(
-                        player.level().dimension().location(), activeZone.hazardTimeSecs());
-                hazardIntensity = (float) leastSevereTimeSecs / activeZone.hazardTimeSecs();
+    private static void syncZoneSeverity(ServerPlayer player, ZoneLookup.ZoneAndCeiling zoneResult,
+            long gameTick, double px, double pz) {
+        float hazardIntensity    = 0.0f;
+        float ceilingOffset      = 0.0f;
+        float floorCeilingOffset = 0.0f;
+        if (zoneResult != null) {
+            int leastSevereTimeSecs = ZoneCacheManager.getLeastSevereSecsForDim(
+                    player.level().dimension().location(), zoneResult.zone().def().hazardTimeSecs());
+            hazardIntensity = (float) leastSevereTimeSecs / zoneResult.zone().def().hazardTimeSecs();
+            double base = zoneResult.zone().def().evalCeiling(gameTick, px, pz);
+            ceilingOffset = (float) (zoneResult.ceiling() - base);
+            if (zoneResult.floor() > 0) {
+                floorCeilingOffset = (float) (zoneResult.floor() - zoneResult.baseFloor());
             }
         }
 
-        int stateKey = Math.round(hazardIntensity * 100);
+        int hazardKey      = Math.round(hazardIntensity * 100);
+        int offsetKey      = Math.round(ceilingOffset); // 1-block precision; sub-block oscillations are imperceptible
+        int floorOffsetKey = Math.round(floorCeilingOffset);
         PlayerSessionState zoneSession = session(player.getUUID());
-        int[] last = zoneSession.lastZoneState;
-        if (last == null || last[0] != stateKey) {
-            zoneSession.lastZoneState = new int[]{stateKey};
-            PacketDistributor.sendToPlayer(player, new SyncZoneSeverityPayload(hazardIntensity));
+        if (zoneSession.lastHazardKey != hazardKey || zoneSession.lastOffsetKey != offsetKey
+                || zoneSession.lastFloorOffsetKey != floorOffsetKey) {
+            zoneSession.lastHazardKey      = hazardKey;
+            zoneSession.lastOffsetKey      = offsetKey;
+            zoneSession.lastFloorOffsetKey = floorOffsetKey;
+            PacketDistributor.sendToPlayer(player,
+                    new SyncZoneSeverityPayload(hazardIntensity, ceilingOffset, floorCeilingOffset));
         }
     }
 
@@ -184,25 +165,6 @@ public class AtmosphereEventHandler {
         UUID id = event.getEntity().getUUID();
         sessionStates.remove(id);
         CeilingGridDebug.onPlayerLoggedOut(id);
-    }
-
-    @SubscribeEvent
-    public static void onLivingBreathe(LivingBreatheEvent event) {
-        if (!(event.getEntity() instanceof Player player)) return;
-        if (player.isCreative() || player.isSpectator()) return;
-
-        int debt;
-        if (player instanceof ServerPlayer sp) {
-            debt = sp.getData(ModAttachments.ATMOSPHERE_DATA.get()).getAirDebt();
-        } else {
-            debt = AtmosphereClientData.getAirDebt(player.getUUID());
-        }
-
-        if (debt > 0) {
-            int ceiling  = player.getMaxAirSupply() - debt;
-            int headroom = Math.max(0, ceiling - player.getAirSupply());
-            event.setRefillAirAmount(Math.min(event.getRefillAirAmount(), headroom));
-        }
     }
 
     @SubscribeEvent
@@ -216,37 +178,16 @@ public class AtmosphereEventHandler {
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         PlayerAtmosphereData data = player.getData(ModAttachments.ATMOSPHERE_DATA.get());
-        AtmosphereSettings cfg = AtmosphereConfig.getSettings();
+        AtmosphereSettings cfg = AtmosphereSettings.getSettings();
         int retainedToxin = (cfg != null) ? Math.min(data.getToxinLevel(), cfg.toxinDeathCap()) : 0;
         data.reset(retainedToxin);
         sessionStates.remove(player.getUUID());
         syncAll(player);
     }
 
-    @SubscribeEvent
-    public static void onBreakSpeed(PlayerEvent.BreakSpeed event) {
-        Player player = event.getEntity();
-        if (player.isCreative() || player.isSpectator()) return;
-
-        int fatigueAmp;
-        if (!player.level().isClientSide()) {
-            if (!(player instanceof ServerPlayer sp)) return;
-            PlayerAtmosphereData data = sp.getData(ModAttachments.ATMOSPHERE_DATA.get());
-            AtmosphereSettings cfg = AtmosphereConfig.getSettings();
-            if (cfg == null) return;
-            fatigueAmp = computeFatigueAmp(data.getToxinLevel(), cfg);
-        } else {
-            fatigueAmp = AtmosphereClientData.getMiningFatigueAmp(player.getUUID());
-        }
-
-        if (fatigueAmp >= 0) {
-            event.setNewSpeed(event.getNewSpeed() * (float) Math.pow(0.3, fatigueAmp + 1));
-        }
-    }
-
     private static void syncAll(ServerPlayer player) {
         PlayerAtmosphereData data = player.getData(ModAttachments.ATMOSPHERE_DATA.get());
-        AtmosphereSettings cfg = AtmosphereConfig.getSettings();
+        AtmosphereSettings cfg = AtmosphereSettings.getSettings();
         int toxin = data.getToxinLevel();
         int fatigueAmp = (cfg != null) ? computeFatigueAmp(toxin, cfg) : -1;
         PacketDistributor.sendToPlayer(player, new SyncAirDebtPayload(data.getAirDebt()));

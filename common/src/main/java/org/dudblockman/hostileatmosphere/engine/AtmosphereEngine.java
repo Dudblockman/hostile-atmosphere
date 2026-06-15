@@ -114,10 +114,11 @@ public class AtmosphereEngine {
             data.setRecoveryAccumulator(0f);
         }
 
+        // LivingBreatheEvent (fires before this handler) prevents air from rising above the ceiling.
+        // Direct setAirSupply is intentionally omitted here — calling it from PlayerTickEvent.Post
+        // would trigger an entity data sync to the client every tick debt changes, causing the air
+        // meter to rubber-band. The client applies its own clamp in ClientEventHandler instead.
         int ceiling = maxAir - data.getAirDebt();
-        if (player.getAirSupply() > ceiling) {
-            player.setAirSupply(ceiling);
-        }
 
         if (data.getAirDebt() >= maxAir && !fullyProtected) {
             data.setSuffocationTicks(data.getSuffocationTicks() + 1);

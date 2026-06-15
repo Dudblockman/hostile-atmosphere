@@ -11,6 +11,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerHeartTypeEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.client.AtmosphereClientData;
+import org.dudblockman.hostileatmosphere.client.AtmosphereHudState;
 import org.dudblockman.hostileatmosphere.client.AtmosphereParticles;
 import org.dudblockman.hostileatmosphere.compat.CreateCompat;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
@@ -36,11 +37,20 @@ public class ClientEventHandler {
         if (!entity.level().isClientSide()) return;
         // Creative and spectator skip hazard effects but still see particles — it's the environment.
         if (!entity.isCreative() && !entity.isSpectator()) {
-            // Visual backtank air
             if (AtmosphereClientData.isDivingActive(entity.getUUID())) {
                 CreateCompat.updateVisualAir(entity);
-            } else {
-                CreateCompat.clearVisualAir(entity);
+            }
+            // Clamp the client's displayed air supply to the debt ceiling without relying on a
+            // server correction. The server no longer calls setAirSupply — doing so from
+            // PlayerTickEvent.Post would trigger an entity data sync each time debt changes,
+            // causing rubber-banding. This runs after LivingBreatheEvent and handles the
+            // 1-tick case where debt just increased but the breathe event used the prior value.
+            int airDebt = AtmosphereClientData.getAirDebt(entity.getUUID());
+            if (airDebt > 0) {
+                int airCeiling = Math.max(0, entity.getMaxAirSupply() - airDebt);
+                if (entity.getAirSupply() > airCeiling) {
+                    entity.setAirSupply(airCeiling);
+                }
             }
         }
 
@@ -55,7 +65,7 @@ public class ClientEventHandler {
             }
 
             AtmosphereParticles.spawn(localPlayer, AtmosphereClientData.getHazardIntensity(localPlayer.getUUID()));
-            AtmosphereClientData.setForceHeartWiggle(wiggle);
+            AtmosphereHudState.setForceHeartWiggle(wiggle);
         }
     }
 

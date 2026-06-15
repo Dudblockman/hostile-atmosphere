@@ -6,8 +6,6 @@ import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.PathfindingContext;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
-import org.dudblockman.hostileatmosphere.config.EntityHazardSettings;
-import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,13 +27,12 @@ public abstract class WalkNodeEvaluatorMixin {
     )
     private void hostileatmosphere$hazardPathType(PathfindingContext context, int x, int y, int z, Mob mob,
             CallbackInfoReturnable<PathType> cir) {
+        if (mob == null) return;
         PathType current = cir.getReturnValue();
         if (current != PathType.WALKABLE && current != PathType.OPEN) return;
-        if (mob == null) return;
-        EntityHazardSettings cfg = AtmosphereConfig.getEntityHazardSettings();
-        if (cfg == null || !EntityHazardEngine.isDamageEnabled(mob.getType(), cfg)) return;
+        if (!AtmosphereConfig.isDamageEnabled(mob.getType())) return;
         if (!(context.level() instanceof ServerLevel sl)) return;
-        if (ZoneLookup.findZoneAt(sl, x + 0.5, y + 0.5, z + 0.5) != null) {
+        if (ZoneLookup.findZoneAt(sl, x + 0.5, y + mob.getBbHeight(), z + 0.5) != null) {
             cir.setReturnValue(PathType.DAMAGE_OTHER);
         }
     }

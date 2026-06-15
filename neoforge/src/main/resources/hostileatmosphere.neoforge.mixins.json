@@ -7,7 +7,7 @@
     "BacktankBlockEntityMixin",
     "WalkNodeEvaluatorMixin"
   ],
-  "client": [],
+  "client": ["client.RemainingAirOverlayMixin"],
   "server": [],
   "injectors": {
     "defaultRequire": 1

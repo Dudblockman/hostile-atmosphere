@@ -6,6 +6,9 @@ import net.neoforged.fml.common.EventBusSubscriber.Bus;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.dudblockman.hostileatmosphere.Constants;
+import org.dudblockman.hostileatmosphere.client.AtmosphereClientData;
+
+import java.util.UUID;
 
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = Bus.MOD)
 public class ModNetworking {
@@ -14,16 +17,23 @@ public class ModNetworking {
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar("1");
 
-        registrar.playToClient(SyncAirDebtPayload.TYPE,    SyncAirDebtPayload.CODEC,
-                (payload, ctx) -> PacketHandlers.onAirDebt(payload, ctx.player().getUUID()));
+        registrar.playToClient(SyncAirDebtPayload.TYPE, SyncAirDebtPayload.CODEC,
+                (payload, ctx) -> AtmosphereClientData.setAirDebt(ctx.player().getUUID(), payload.airDebt()));
 
-        registrar.playToClient(SyncToxinPayload.TYPE,      SyncToxinPayload.CODEC,
-                (payload, ctx) -> PacketHandlers.onToxin(payload, ctx.player().getUUID()));
+        registrar.playToClient(SyncToxinPayload.TYPE, SyncToxinPayload.CODEC, (payload, ctx) -> {
+            UUID id = ctx.player().getUUID();
+            AtmosphereClientData.setToxin(id, payload.toxinLevel());
+            AtmosphereClientData.setMiningFatigueAmp(id, payload.miningFatigueAmp());
+        });
 
         registrar.playToClient(SyncDivingActivePayload.TYPE, SyncDivingActivePayload.CODEC,
-                (payload, ctx) -> PacketHandlers.onDivingActive(payload, ctx.player().getUUID()));
+                (payload, ctx) -> AtmosphereClientData.setDivingActive(ctx.player().getUUID(), payload.divingActive()));
 
-        registrar.playToClient(SyncZoneSeverityPayload.TYPE, SyncZoneSeverityPayload.CODEC,
-                (payload, ctx) -> PacketHandlers.onZoneSeverity(payload, ctx.player().getUUID()));
+        registrar.playToClient(SyncZoneSeverityPayload.TYPE, SyncZoneSeverityPayload.CODEC, (payload, ctx) -> {
+            UUID id = ctx.player().getUUID();
+            AtmosphereClientData.setHazardIntensity(id, payload.hazardIntensity());
+            AtmosphereClientData.setCeilingOffset(id, payload.ceilingOffset());
+            AtmosphereClientData.setFloorCeilingOffset(id, payload.floorCeilingOffset());
+        });
     }
 }

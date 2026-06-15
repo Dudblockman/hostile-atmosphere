@@ -14,20 +14,18 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import org.dudblockman.hostileatmosphere.Constants;
+import org.dudblockman.hostileatmosphere.ai.FleeHazardGoal;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
-import org.dudblockman.hostileatmosphere.config.EntityHazardSettings;
+import org.dudblockman.hostileatmosphere.engine.EntityAirStateCache;
 import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 
-import java.util.Map;
-import java.util.WeakHashMap;
-
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
 public class EntityHazardEventHandler {
 
-    private static final Map<LivingEntity, EntityHazardEngine.EntityAirState> entityAirState = new WeakHashMap<>();
+    private static final EntityAirStateCache entityAirState = new EntityAirStateCache();
 
     @SubscribeEvent
     public static void onEntityTick(EntityTickEvent.Post event) {
@@ -35,27 +33,25 @@ public class EntityHazardEventHandler {
         if (entity.level().isClientSide()) return;
         if (!(entity instanceof LivingEntity living)) return;
 
-        EntityHazardSettings cfg = AtmosphereConfig.getEntityHazardSettings();
-        if (cfg == null) return;
         AtmosphereSettings atmosphereSettings = AtmosphereConfig.getSettings();
         if (atmosphereSettings == null) return;
 
         if (!EntityHazardEngine.isSubjectToHazard(living)) return;
         if (living.isDeadOrDying()) {
-            entityAirState.remove(living);
+            entityAirState.remove(living.getUUID());
             return;
         }
-        if (!EntityHazardEngine.isDamageEnabled(living.getType(), cfg)) return;
+        if (!AtmosphereConfig.isDamageEnabled(living.getType())) return;
         if (!(living.level() instanceof ServerLevel serverLevel)) return;
 
         ZoneDefinition activeZone = ZoneLookup.findZoneAt(serverLevel, living.getX(), living.getEyeY(), living.getZ());
-        EntityHazardEngine.EntityAirState current = entityAirState.getOrDefault(living, EntityHazardEngine.EntityAirState.ZERO);
+        EntityHazardEngine.EntityAirState current = entityAirState.get(living.getUUID());
         EntityHazardEngine.EntityAirState next = EntityHazardEngine.tickAirDebt(living, current, activeZone, atmosphereSettings);
 
         if (next == EntityHazardEngine.EntityAirState.ZERO) {
-            entityAirState.remove(living);
+            entityAirState.remove(living.getUUID());
         } else {
-            entityAirState.put(living, next);
+            entityAirState.put(living.getUUID(), next);
         }
     }
 
@@ -63,8 +59,10 @@ public class EntityHazardEventHandler {
     public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof Mob mob)) return;
-        if (!EntityHazardEngine.isSubjectToHazard(mob.getType())) return;
-        mob.goalSelector.addGoal(2, new FleeHazardGoal(mob));
+        AtmosphereSettings.EntityHazardSettings cfg = AtmosphereSettings.getEntityHazardSettings();
+        if (cfg == null) return;
+        if (!EntityHazardEngine.isDamageEnabled(mob.getType(), cfg)) return;
+        mob.goalSelector.addGoal(2, new FleeHazardGoal(mob, EntityHazardEventHandler::getAirDebt));
     }
 
     @SubscribeEvent
@@ -72,7 +70,7 @@ public class EntityHazardEventHandler {
         MobSpawnType spawnType = event.getSpawnType();
         if (spawnType != MobSpawnType.NATURAL && spawnType != MobSpawnType.PATROL) return;
 
-        EntityHazardSettings cfg = AtmosphereConfig.getEntityHazardSettings();
+        AtmosphereSettings.EntityHazardSettings cfg = AtmosphereSettings.getEntityHazardSettings();
         if (cfg == null) return;
 
         EntityType<?> type = event.getEntityType();
@@ -81,11 +79,18 @@ public class EntityHazardEventHandler {
 
         if (!(event.getLevel() instanceof ServerLevel serverLevel)) return;
         BlockPos pos = event.getPos();
-        EntityDimensions dims = type.getDimensions();
-        double eyeY = pos.getY() + dims.height() * 0.85;
-        ZoneDefinition zone = ZoneLookup.findZoneAt(serverLevel, pos.getX() + 0.5, eyeY, pos.getZ() + 0.5);
+        ZoneDefinition zone = ZoneLookup.findZoneAt(serverLevel, pos.getX() + 0.5, spawnEyeY(pos, type), pos.getZ() + 0.5);
         if (zone == null) return;
 
         event.setResult(MobSpawnEvent.SpawnPlacementCheck.Result.FAIL);
+    }
+
+    public static int getAirDebt(LivingEntity entity) {
+        return entityAirState.getAirDebt(entity.getUUID());
+    }
+
+    private static double spawnEyeY(BlockPos pos, EntityType<?> type) {
+        EntityDimensions dims = type.getDimensions();
+        return pos.getY() + dims.height() * 0.85;
     }
 }

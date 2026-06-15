@@ -11,6 +11,7 @@ import org.dudblockman.hostileatmosphere.compat.CreateCompat;
 import org.dudblockman.hostileatmosphere.config.AtmosphereConfig;
 import org.dudblockman.hostileatmosphere.command.CeilingGridDebug;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
+import org.dudblockman.hostileatmosphere.progression.ZoneCacheManager;
 import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 import org.dudblockman.hostileatmosphere.registry.ModAttachments;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
@@ -37,7 +38,7 @@ public final class DebugCommandsHandler {
         ModifierCommand.register(event.getDispatcher(),
                 (ctx, builder) -> {
                     builder.suggest("all");
-                    ZoneLookup.getCachedZoneIds().values().forEach(ids -> ids.forEach(builder::suggest));
+                    ZoneCacheManager.getCachedZoneIds().values().forEach(ids -> ids.forEach(builder::suggest));
                     return builder.buildFuture();
                 },
                 (src, zoneId) -> ZoneLookup.findZoneByIdForDim(

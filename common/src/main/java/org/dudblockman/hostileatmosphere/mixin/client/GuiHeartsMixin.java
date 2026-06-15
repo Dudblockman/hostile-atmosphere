@@ -2,7 +2,7 @@ package org.dudblockman.hostileatmosphere.mixin.client;
 
 import net.minecraft.client.gui.Gui;
 import net.minecraft.util.RandomSource;
-import org.dudblockman.hostileatmosphere.client.AtmosphereClientData;
+import org.dudblockman.hostileatmosphere.client.AtmosphereHudState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -26,7 +26,7 @@ public abstract class GuiHeartsMixin {
         )
     )
     private void ha_captureWiggleState(CallbackInfo ci) {
-        hostileatmosphere$forceWiggle = AtmosphereClientData.isForceHeartWiggle();
+        hostileatmosphere$forceWiggle = AtmosphereHudState.isForceHeartWiggle();
     }
 
     @ModifyVariable(

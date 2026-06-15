@@ -48,11 +48,6 @@ public final class CreateCompat {
         Delegate.updateVisualAir(entity);
     }
 
-    public static void clearVisualAir(LivingEntity entity) {
-        if (!LOADED) return;
-        entity.getPersistentData().remove(VISUAL_BACKTANK_AIR);
-    }
-
     // -------------------------------------------------------------------------
     // All Create class references live here. The JVM will not resolve this
     // class until Delegate.check() is first invoked, which only happens when

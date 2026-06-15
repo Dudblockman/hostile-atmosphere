@@ -44,6 +44,7 @@ public interface ValueSource {
             Map.entry("constant",  Constant.CODEC),
             Map.entry("sin",       SinWave.CODEC),
             Map.entry("perlin",    Perlin.CODEC),
+            Map.entry("drift",     Drift.CODEC),
             Map.entry("predicate", PredicateSource.CODEC)
     );
 
@@ -173,5 +174,61 @@ public interface ValueSource {
                 Codec.LONG.optionalFieldOf("startTick", 0L).forGetter(Perlin::startTick),
                 Codec.LONG.fieldOf("seed").forGetter(Perlin::seed)
         ).apply(i, Perlin::new));
+    }
+
+    /**
+     * Time-only Perlin noise: samples a 1-D slice of noise so the result is the same at every
+     * world position but drifts smoothly up and down as the tick advances. Amplitude tweens from
+     * {@code fromAmplitude} to {@code amplitude}; {@code timeTicks} controls how many ticks
+     * elapse per unit of noise coordinate (higher = slower drift).
+     */
+    record Drift(
+            double fromAmplitude,
+            double amplitude,
+            double timeTicks,
+            long tweenTicks,
+            long startTick,
+            long seed
+    ) implements ValueSource {
+
+        private static final Map<Long, ImprovedNoise> NOISE_CACHE = Collections.synchronizedMap(
+                new java.util.LinkedHashMap<Long, ImprovedNoise>(32, 0.75f, true) {
+                    @Override protected boolean removeEldestEntry(java.util.Map.Entry<Long, ImprovedNoise> eldest) {
+                        return size() > 32;
+                    }
+                });
+
+        @Override public String type() { return "drift"; }
+
+        @Override
+        public double get(long tick) {
+            double t   = tweenTicks <= 0 ? 1.0
+                    : Mth.clamp((double) (tick - startTick) / tweenTicks, 0.0, 1.0);
+            double amp = fromAmplitude + (amplitude - fromAmplitude) * t;
+            double timeCoord = timeTicks == 0.0 ? 0.0 : (double) tick / timeTicks;
+            double raw = amp * noise().noise(timeCoord, 0.0, 0.0);
+            return Mth.clamp(raw, -Math.abs(amp), Math.abs(amp));
+        }
+
+        @Override
+        public ValueSource settle(long tick) {
+            return tweenTicks > 0 && tick - startTick >= tweenTicks
+                    ? new Drift(0.0, amplitude, timeTicks, 0L, 0L, seed) : this;
+        }
+
+        private ImprovedNoise noise() {
+            return NOISE_CACHE.computeIfAbsent(seed, s ->
+                    new ImprovedNoise(new XoroshiroRandomSource(s, s ^ 0x9E3779B97F4A7C15L)));
+        }
+
+        @SuppressWarnings("null")
+        static final MapCodec<Drift> CODEC = RecordCodecBuilder.<Drift>mapCodec(i -> i.group(
+                Codec.DOUBLE.optionalFieldOf("fromAmplitude", 0.0).forGetter(Drift::fromAmplitude),
+                Codec.DOUBLE.fieldOf("amplitude").forGetter(Drift::amplitude),
+                Codec.DOUBLE.fieldOf("timeTicks").forGetter(Drift::timeTicks),
+                Codec.LONG.optionalFieldOf("tweenTicks", 0L).forGetter(Drift::tweenTicks),
+                Codec.LONG.optionalFieldOf("startTick", 0L).forGetter(Drift::startTick),
+                Codec.LONG.fieldOf("seed").forGetter(Drift::seed)
+        ).apply(i, Drift::new));
     }
 }

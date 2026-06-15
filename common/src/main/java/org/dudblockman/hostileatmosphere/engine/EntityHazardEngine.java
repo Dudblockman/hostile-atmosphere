@@ -1,11 +1,9 @@
 package org.dudblockman.hostileatmosphere.engine;
 
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
-import org.dudblockman.hostileatmosphere.config.EntityHazardSettings;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.dudblockman.hostileatmosphere.registry.ModEntityTags;
 
@@ -25,22 +23,12 @@ public class EntityHazardEngine {
         return !type.is(ModEntityTags.HAZARD_EXEMPT);
     }
 
-    public static boolean isDamageEnabled(EntityType<?> type, EntityHazardSettings cfg) {
-        if (!cfg.enabled()) return false;
-        return matchesAny(type,
-                new CategoryCheck(cfg.damagePassive(),  ModEntityTags.HAZARD_DAMAGE_PASSIVE),
-                new CategoryCheck(cfg.damageHostile(),  ModEntityTags.HAZARD_DAMAGE_HOSTILE),
-                new CategoryCheck(cfg.damageAquatic(),  ModEntityTags.HAZARD_DAMAGE_AQUATIC),
-                new CategoryCheck(cfg.damageNpc(),      ModEntityTags.HAZARD_DAMAGE_NPC));
+    public static boolean isDamageEnabled(EntityType<?> type, AtmosphereSettings.EntityHazardSettings cfg) {
+        return cfg.isDamageEnabled(type);
     }
 
-    public static boolean isSuppressEnabled(EntityType<?> type, EntityHazardSettings cfg) {
-        if (!cfg.enabled()) return false;
-        return matchesAny(type,
-                new CategoryCheck(cfg.suppressPassive(),  ModEntityTags.SPAWN_SUPPRESS_PASSIVE),
-                new CategoryCheck(cfg.suppressHostile(),  ModEntityTags.SPAWN_SUPPRESS_HOSTILE),
-                new CategoryCheck(cfg.suppressAquatic(),  ModEntityTags.SPAWN_SUPPRESS_AQUATIC),
-                new CategoryCheck(cfg.suppressNpc(),      ModEntityTags.SPAWN_SUPPRESS_NPC));
+    public static boolean isSuppressEnabled(EntityType<?> type, AtmosphereSettings.EntityHazardSettings cfg) {
+        return cfg.isSuppressEnabled(type);
     }
 
     /**
@@ -68,14 +56,5 @@ public class EntityHazardEngine {
             entity.hurt(MiasmaDamageTypes.miasma(entity), cfg.rampDamageTier1());
         }
         return new EntityAirState(newDebt, acc, newSuff);
-    }
-
-    private record CategoryCheck(boolean flag, TagKey<EntityType<?>> tag) {
-        boolean matches(EntityType<?> type) { return flag && type.is(tag); }
-    }
-
-    private static boolean matchesAny(EntityType<?> type, CategoryCheck... checks) {
-        for (CategoryCheck c : checks) if (c.matches(type)) return true;
-        return false;
     }
 }
