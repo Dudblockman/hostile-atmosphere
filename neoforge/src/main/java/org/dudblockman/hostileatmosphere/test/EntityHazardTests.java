@@ -73,9 +73,9 @@ public class EntityHazardTests {
     public static void damageDisabledWhenMasterOff(GameTestHelper helper) {
         AtmosphereSettings.EntityHazardSettings cfg = settings(false, true, true, true, true);
         GameTestAssertions.assertTrue("isDamageEnabled returns false when master off",
-                !EntityHazardEngine.isDamageEnabled(EntityType.COW, cfg), helper);
+                !cfg.isDamageEnabled(EntityType.COW), helper);
         GameTestAssertions.assertTrue("isSuppressEnabled returns false when master off",
-                !EntityHazardEngine.isSuppressEnabled(EntityType.COW, cfg), helper);
+                !cfg.isSuppressEnabled(EntityType.COW), helper);
         helper.succeed();
     }
 
@@ -104,8 +104,6 @@ public class EntityHazardTests {
         GameTestAssertions.assertTrue("suppressAquatic default false", !cfg.suppressAquatic(), helper);
         helper.succeed();
     }
-
-    // ------------------------------------------------------------------------------------------
 
     /** Default settings as shipped (master on, passive damage on, passive+npc suppression on). */
     private static AtmosphereSettings.EntityHazardSettings defaultSettings() {

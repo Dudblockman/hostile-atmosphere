@@ -94,9 +94,9 @@ public final class AtmosphereParticles {
         int   candidates = stochasticCount(rng, maxRate);
 
         for (int i = 0; i < candidates; i++) {
-            AnnularOffset off = sampleAnnular(rng);
+            double[] off = sampleAnnular(rng);
             if (off == null) continue;
-            double bx = px + off.x(), bz = pz + off.z();
+            double bx = px + off[0], bz = pz + off[1];
 
             double ceiling = activeZone.evalCeiling(tick, bx, bz) + ceilingOffset;
             double floor   = floorZone != null ? floorZone.evalCeiling(tick, bx, bz) : Double.NEGATIVE_INFINITY;
@@ -141,23 +141,21 @@ public final class AtmosphereParticles {
             int count, ZoneDefinition zone, long tick, double spread, ZoneDefinition capZone,
             float offset) {
         for (int i = 0; i < count; i++) {
-            AnnularOffset off = sampleAnnular(rng);
+            double[] off = sampleAnnular(rng);
             if (off == null) continue;
-            double bx    = px + off.x(), bz = pz + off.z();
+            double bx    = px + off[0], bz = pz + off[1];
             double ceilY = zone.evalCeiling(tick, bx, bz) + offset;
             if (capZone != null && ceilY >= capZone.evalCeiling(tick, bx, bz)) continue;
             level.addParticle(ParticleTypes.MYCELIUM, bx, ceilY + rng.nextDouble() * spread, bz, 0.0, 0.0, 0.0);
         }
     }
 
-    private record AnnularOffset(double x, double z) {}
-
     /** Samples a random XZ offset in the annulus r∈[2,12] centred on the player, or null if rejected. */
-    private static AnnularOffset sampleAnnular(RandomSource rng) {
+    private static double[] sampleAnnular(RandomSource rng) {
         double offX  = rng.nextDouble() * 24.0 - 12.0;
         double offZ  = rng.nextDouble() * 24.0 - 12.0;
         double dist2 = offX * offX + offZ * offZ;
-        return (dist2 >= 4.0 && dist2 <= 144.0) ? new AnnularOffset(offX, offZ) : null;
+        return (dist2 >= 4.0 && dist2 <= 144.0) ? new double[]{offX, offZ} : null;
     }
 
     private static double maxCeilingNear(ZoneDefinition zone, long tick, double px, double pz) {

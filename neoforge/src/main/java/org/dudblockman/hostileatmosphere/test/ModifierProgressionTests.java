@@ -30,10 +30,6 @@ public class ModifierProgressionTests {
         return new AtmosphereProgressionData();
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Add
-    // ------------------------------------------------------------------------------------------
-
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void addModifierChangesLevel(GameTestHelper helper) {
         AtmosphereProgressionData data = freshData();
@@ -50,10 +46,6 @@ public class ModifierProgressionTests {
         assertEquals(30.0, data.getLevelForZone(0, 0, 0, "all"), helper);
         helper.succeed();
     }
-
-    // ------------------------------------------------------------------------------------------
-    // Overwrite
-    // ------------------------------------------------------------------------------------------
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void overwriteSameKeyUsesLatest(GameTestHelper helper) {
@@ -77,10 +69,6 @@ public class ModifierProgressionTests {
         helper.succeed();
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Remove
-    // ------------------------------------------------------------------------------------------
-
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void removeModifierReverts(GameTestHelper helper) {
         AtmosphereProgressionData data = freshData();
@@ -98,10 +86,6 @@ public class ModifierProgressionTests {
         assertEquals(10.0, data.getLevelForZone(0, 0, 0, "all"), helper);
         helper.succeed();
     }
-
-    // ------------------------------------------------------------------------------------------
-    // Clear by target
-    // ------------------------------------------------------------------------------------------
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void clearForTargetRemovesOnlyThatScope(GameTestHelper helper) {
@@ -126,10 +110,6 @@ public class ModifierProgressionTests {
         assertEquals(25.0, data.getLevelForZone(0, 0, 0, "all"), helper);
         helper.succeed();
     }
-
-    // ------------------------------------------------------------------------------------------
-    // Zone scoping
-    // ------------------------------------------------------------------------------------------
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void allScopeAffectsEveryZone(GameTestHelper helper) {
@@ -172,8 +152,6 @@ public class ModifierProgressionTests {
         assertEquals(20.0, data.getLevelForZone(0, 0, 0, "toxic"),  helper);
         helper.succeed();
     }
-
-    // ------------------------------------------------------------------------------------------
 
     private static ValueSource constant(double v) {
         return new ValueSource.Constant(0.0, v, 0L, 0L);

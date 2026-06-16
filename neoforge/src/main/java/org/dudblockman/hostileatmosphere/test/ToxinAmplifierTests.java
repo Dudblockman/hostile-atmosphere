@@ -76,13 +76,12 @@ public class ToxinAmplifierTests {
         helper.succeed();
     }
 
-    // ------------------------------------------------------------------------------------------
-
     private static void assertAmplifier(int toxin, int expectedAmp, GameTestHelper helper) {
         int actual = AtmosphereEngine.getToxinAmplifier(toxin, CFG);
         if (actual != expectedAmp) {
             String msg = String.format("getToxinAmplifier(%d): expected amp %d but was %d", toxin, expectedAmp, actual);
             helper.fail(msg);
+            throw new RuntimeException(msg);
         }
     }
 }

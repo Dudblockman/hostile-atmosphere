@@ -104,9 +104,4 @@ public record AtmosphereSettings(
     public static EntityHazardSettings getEntityHazardSettings() {
         return entityHazardSupplier != null ? entityHazardSupplier.get() : null;
     }
-
-    public static boolean isDamageEnabled(EntityType<?> type) {
-        EntityHazardSettings cfg = getEntityHazardSettings();
-        return cfg != null && cfg.isDamageEnabled(type);
-    }
 }

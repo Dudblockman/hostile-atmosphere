@@ -9,15 +9,10 @@ import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.synth.ImprovedNoise;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Computes a scalar value from the current game tick and optional world position.
- * {@link Constant} supports a linear tween from {@code fromValue} to {@code value} over
- * {@code tweenTicks} ticks. Dynamic sources (sin, perlin) have an amplitude ramp-in from 0.
- * {@code tweenTicks=0} means instant in all cases.
- */
 public interface ValueSource {
 
     double get(long tick);
@@ -48,7 +43,17 @@ public interface ValueSource {
             Map.entry("predicate", PredicateSource.CODEC)
     );
 
-    // ------------------------------------------------------------------------------------------
+    private static double tweenProgress(long tick, long startTick, long tweenTicks) {
+        return tweenTicks <= 0 ? 1.0 : Mth.clamp((double) (tick - startTick) / tweenTicks, 0.0, 1.0);
+    }
+
+    private static Map<Long, ImprovedNoise> makeNoiseCache(int capacity) {
+        return Collections.synchronizedMap(new LinkedHashMap<>(capacity, 0.75f, true) {
+            @Override protected boolean removeEldestEntry(Map.Entry<Long, ImprovedNoise> eldest) {
+                return size() > capacity;
+            }
+        });
+    }
 
     record Constant(double fromValue, double value, long tweenTicks, long startTick) implements ValueSource {
 
@@ -56,9 +61,7 @@ public interface ValueSource {
 
         @Override
         public double get(long tick) {
-            if (tweenTicks <= 0) return value;
-            double t = Mth.clamp((double) (tick - startTick) / tweenTicks, 0.0, 1.0);
-            return fromValue + (value - fromValue) * t;
+            return Mth.lerp(tweenProgress(tick, startTick, tweenTicks), fromValue, value);
         }
 
         @Override
@@ -87,14 +90,13 @@ public interface ValueSource {
 
         @Override
         public double get(long tick) {
-            double t   = tweenTicks <= 0 ? 1.0
-                    : Mth.clamp((double) (tick - startTick) / tweenTicks, 0.0, 1.0);
-            double amp = fromAmplitude + (amplitude - fromAmplitude) * t;
+            double t      = tweenProgress(tick, startTick, tweenTicks);
+            double amp    = Mth.lerp(t, fromAmplitude, amplitude);
             // fromPeriodTicks <= 0 is the sentinel meaning "same as target" (avoids divide-by-zero
             // on the default-0 codec value and on the tween-from-silence case).
             double fp     = fromPeriodTicks <= 0 ? periodTicks : fromPeriodTicks;
-            double period = fp + (periodTicks - fp) * t;
-            double phase  = fromPhaseTicks + (phaseTicks - fromPhaseTicks) * t;
+            double period = Mth.lerp(t, fp, periodTicks);
+            double phase  = Mth.lerp(t, fromPhaseTicks, phaseTicks);
             if (period == 0.0) return 0.0;
             return amp * Math.sin(2.0 * Math.PI * (tick - phase) / period);
         }
@@ -132,12 +134,7 @@ public interface ValueSource {
             long seed
     ) implements ValueSource {
 
-        private static final Map<Long, ImprovedNoise> NOISE_CACHE = Collections.synchronizedMap(
-                new java.util.LinkedHashMap<Long, ImprovedNoise>(32, 0.75f, true) {
-                    @Override protected boolean removeEldestEntry(java.util.Map.Entry<Long, ImprovedNoise> eldest) {
-                        return size() > 32;
-                    }
-                });
+        private static final Map<Long, ImprovedNoise> NOISE_CACHE = makeNoiseCache(32);
 
         @Override public String type() { return "perlin"; }
 
@@ -145,9 +142,7 @@ public interface ValueSource {
 
         @Override
         public double get(long tick, double x, double z) {
-            double t   = tweenTicks <= 0 ? 1.0
-                    : Mth.clamp((double) (tick - startTick) / tweenTicks, 0.0, 1.0);
-            double amp = fromAmplitude + (amplitude - fromAmplitude) * t;
+            double amp = Mth.lerp(tweenProgress(tick, startTick, tweenTicks), fromAmplitude, amplitude);
             double timeCoord = timeTicks == 0.0 ? 0.0 : (double) tick / timeTicks;
             double raw = amp * noise().noise(x * xzScale, timeCoord, z * xzScale);
             return Mth.clamp(raw, -Math.abs(amp), Math.abs(amp));
@@ -191,20 +186,13 @@ public interface ValueSource {
             long seed
     ) implements ValueSource {
 
-        private static final Map<Long, ImprovedNoise> NOISE_CACHE = Collections.synchronizedMap(
-                new java.util.LinkedHashMap<Long, ImprovedNoise>(32, 0.75f, true) {
-                    @Override protected boolean removeEldestEntry(java.util.Map.Entry<Long, ImprovedNoise> eldest) {
-                        return size() > 32;
-                    }
-                });
+        private static final Map<Long, ImprovedNoise> NOISE_CACHE = makeNoiseCache(32);
 
         @Override public String type() { return "drift"; }
 
         @Override
         public double get(long tick) {
-            double t   = tweenTicks <= 0 ? 1.0
-                    : Mth.clamp((double) (tick - startTick) / tweenTicks, 0.0, 1.0);
-            double amp = fromAmplitude + (amplitude - fromAmplitude) * t;
+            double amp = Mth.lerp(tweenProgress(tick, startTick, tweenTicks), fromAmplitude, amplitude);
             double timeCoord = timeTicks == 0.0 ? 0.0 : (double) tick / timeTicks;
             double raw = amp * noise().noise(timeCoord, 0.0, 0.0);
             return Mth.clamp(raw, -Math.abs(amp), Math.abs(amp));

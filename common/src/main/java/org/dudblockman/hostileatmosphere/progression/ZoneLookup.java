@@ -3,9 +3,10 @@ package org.dudblockman.hostileatmosphere.progression;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
-import org.dudblockman.hostileatmosphere.client.ClientZoneCache;
+import org.dudblockman.hostileatmosphere.registry.ModRegistries;
 
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalDouble;
 
 /** Zone query API. Cache lifecycle is managed by {@link ZoneCacheManager}. */
@@ -14,6 +15,21 @@ public final class ZoneLookup {
     public record Located(String id, ZoneDefinition def) {}
 
     public record ZoneAndCeiling(Located zone, double ceiling, double floor, double baseFloor) {}
+
+    private record ZoneQueryContext(
+            List<ZoneDefinition> zones,
+            List<String> ids,
+            long tick,
+            AtmosphereProgressionData prog) {}
+
+    private static ZoneQueryContext queryContext(ServerLevel level) {
+        ResourceLocation dim = level.dimension().location();
+        return new ZoneQueryContext(
+                ZoneCacheManager.getZonesForDim(dim),
+                ZoneCacheManager.getIdsForDim(dim),
+                level.getGameTime(),
+                AtmosphereProgressionData.get(level.getServer()));
+    }
 
     private ZoneLookup() {}
 
@@ -27,34 +43,26 @@ public final class ZoneLookup {
      */
     public static ZoneDefinition findZoneAt(Level level, double x, double y, double z) {
         if (level instanceof ServerLevel sl) return findZoneAt(sl, x, y, z);
-        return ClientZoneCache.findZoneAt(level, x, y, z);
+        return findZoneAtClient(level, x, y, z);
     }
 
     /** Convenience lookup for non-player callers (e.g. block entity mixins). */
     public static ZoneDefinition findZoneAt(ServerLevel level, double x, double y, double z) {
-        ResourceLocation dim = level.dimension().location();
-        List<ZoneDefinition> zones = ZoneCacheManager.getZonesForDim(dim);
-        List<String> ids = ZoneCacheManager.getIdsForDim(dim);
-        long tick = level.getGameTime();
-        AtmosphereProgressionData prog = AtmosphereProgressionData.get(level.getServer());
-        for (int i = 0; i < zones.size(); i++) {
-            double ceiling = prog.getEffectiveCeiling(tick, x, z, ids.get(i), zones.get(i).evalCeiling(tick, x, z));
-            if (y <= ceiling) return zones.get(i);
+        var ctx = queryContext(level);
+        for (int i = 0; i < ctx.zones().size(); i++) {
+            double ceiling = ctx.prog().getEffectiveCeiling(ctx.tick(), x, z, ctx.ids().get(i), ctx.zones().get(i).evalCeiling(ctx.tick(), x, z));
+            if (y <= ceiling) return ctx.zones().get(i);
         }
         return null;
     }
 
     /** Returns the zone and its ID at the given position, or {@code null} if in safe air. */
     public static Located findLocatedZone(ServerLevel level, double x, double y, double z) {
-        ResourceLocation dim = level.dimension().location();
-        List<ZoneDefinition> zones = ZoneCacheManager.getZonesForDim(dim);
-        List<String> ids = ZoneCacheManager.getIdsForDim(dim);
-        long tick = level.getGameTime();
-        AtmosphereProgressionData prog = AtmosphereProgressionData.get(level.getServer());
-        for (int i = 0; i < zones.size(); i++) {
-            String id = ids.get(i);
-            ZoneDefinition zone = zones.get(i);
-            double ceiling = prog.getEffectiveCeiling(tick, x, z, id, zone.evalCeiling(tick, x, z));
+        var ctx = queryContext(level);
+        for (int i = 0; i < ctx.zones().size(); i++) {
+            String id = ctx.ids().get(i);
+            ZoneDefinition zone = ctx.zones().get(i);
+            double ceiling = ctx.prog().getEffectiveCeiling(ctx.tick(), x, z, id, zone.evalCeiling(ctx.tick(), x, z));
             if (y <= ceiling) return new Located(id, zone);
         }
         return null;
@@ -65,13 +73,9 @@ public final class ZoneLookup {
      * or empty if the position is in safe air.
      */
     public static OptionalDouble getEffectiveCeilingAt(ServerLevel level, double x, double y, double z) {
-        ResourceLocation dim = level.dimension().location();
-        List<ZoneDefinition> zones = ZoneCacheManager.getZonesForDim(dim);
-        List<String> ids = ZoneCacheManager.getIdsForDim(dim);
-        long tick = level.getGameTime();
-        AtmosphereProgressionData prog = AtmosphereProgressionData.get(level.getServer());
-        for (int i = 0; i < zones.size(); i++) {
-            double ceiling = prog.getEffectiveCeiling(tick, x, z, ids.get(i), zones.get(i).evalCeiling(tick, x, z));
+        var ctx = queryContext(level);
+        for (int i = 0; i < ctx.zones().size(); i++) {
+            double ceiling = ctx.prog().getEffectiveCeiling(ctx.tick(), x, z, ctx.ids().get(i), ctx.zones().get(i).evalCeiling(ctx.tick(), x, z));
             if (y <= ceiling) return OptionalDouble.of(ceiling);
         }
         return OptionalDouble.empty();
@@ -82,20 +86,16 @@ public final class ZoneLookup {
      * the next more-severe zone below, or 0 for the deepest zone), or {@code null} if in safe air.
      */
     public static ZoneAndCeiling findZoneAndFloor(ServerLevel level, double x, double y, double z) {
-        ResourceLocation dim = level.dimension().location();
-        List<ZoneDefinition> zones = ZoneCacheManager.getZonesForDim(dim);
-        List<String> ids = ZoneCacheManager.getIdsForDim(dim);
-        long tick = level.getGameTime();
-        AtmosphereProgressionData prog = AtmosphereProgressionData.get(level.getServer());
-        for (int i = 0; i < zones.size(); i++) {
-            String id = ids.get(i);
-            double ceiling = prog.getEffectiveCeiling(tick, x, z, id, zones.get(i).evalCeiling(tick, x, z));
+        var ctx = queryContext(level);
+        for (int i = 0; i < ctx.zones().size(); i++) {
+            String id = ctx.ids().get(i);
+            double ceiling = ctx.prog().getEffectiveCeiling(ctx.tick(), x, z, id, ctx.zones().get(i).evalCeiling(ctx.tick(), x, z));
             if (y <= ceiling) {
                 double floor = i > 0
-                        ? prog.getEffectiveCeiling(tick, x, z, ids.get(i - 1), zones.get(i - 1).evalCeiling(tick, x, z))
+                        ? ctx.prog().getEffectiveCeiling(ctx.tick(), x, z, ctx.ids().get(i - 1), ctx.zones().get(i - 1).evalCeiling(ctx.tick(), x, z))
                         : 0;
-                double baseFloor = i > 0 ? zones.get(i - 1).evalCeiling(tick, x, z) : 0;
-                return new ZoneAndCeiling(new Located(id, zones.get(i)), ceiling, floor, baseFloor);
+                double baseFloor = i > 0 ? ctx.zones().get(i - 1).evalCeiling(ctx.tick(), x, z) : 0;
+                return new ZoneAndCeiling(new Located(id, ctx.zones().get(i)), ceiling, floor, baseFloor);
             }
         }
         return null;
@@ -107,5 +107,19 @@ public final class ZoneLookup {
         List<ZoneDefinition> zones = ZoneCacheManager.getZonesForDim(dim);
         int idx = ids.indexOf(zoneId);
         return idx >= 0 ? zones.get(idx) : null;
+    }
+
+    private static ZoneDefinition findZoneAtClient(Level level, double x, double y, double z) {
+        ResourceLocation dim = level.dimension().location();
+        long tick = level.getGameTime();
+        return level.registryAccess().registry(ModRegistries.ZONES)
+                .flatMap(reg -> reg.stream()
+                        .filter(zone -> zone.dimension().equals(dim))
+                        .map(zone -> Map.entry(zone.evalCeiling(tick, x, z), zone))
+                        .sorted(Map.Entry.comparingByKey())
+                        .filter(e -> y <= e.getKey())
+                        .map(Map.Entry::getValue)
+                        .findFirst())
+                .orElse(null);
     }
 }

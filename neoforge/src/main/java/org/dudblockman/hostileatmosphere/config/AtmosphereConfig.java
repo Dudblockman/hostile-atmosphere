@@ -1,7 +1,6 @@
 package org.dudblockman.hostileatmosphere.config;
 
 import net.minecraft.world.entity.EntityType;
-import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 import org.dudblockman.hostileatmosphere.registry.ModAttributes;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
 
@@ -18,7 +17,7 @@ public final class AtmosphereConfig {
 
     public static boolean isDamageEnabled(EntityType<?> type) {
         AtmosphereSettings.EntityHazardSettings cfg = getEntityHazardSettings();
-        return cfg != null && EntityHazardEngine.isDamageEnabled(type, cfg);
+        return cfg != null && cfg.isDamageEnabled(type);
     }
 
     public static void cacheSettings() {

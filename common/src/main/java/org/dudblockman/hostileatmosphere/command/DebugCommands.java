@@ -6,90 +6,93 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.dudblockman.hostileatmosphere.Constants;
-import org.dudblockman.hostileatmosphere.engine.ProtectionLevel;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
 import org.dudblockman.hostileatmosphere.engine.AtmosphereEngine;
+import org.dudblockman.hostileatmosphere.engine.ProtectionLevel;
+import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
+import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 public final class DebugCommands {
 
-    private DebugCommands() {}
-
-    public static void register(
-            CommandDispatcher<CommandSourceStack> dispatcher,
+    /**
+     * Loader-specific operations injected by the platform module at registration time.
+     * Each field corresponds to one NeoForge/Fabric API that common code cannot call directly.
+     */
+    public record Platform(
             Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
             Supplier<AtmosphereSettings> configGetter,
-            Consumer<ServerPlayer> removeEffect,
-            Function<ServerPlayer, ProtectionLevel> protectionGetter,
-            Function<ServerPlayer, ZoneDefinition> activeZoneGetter,
-            Function<ServerPlayer, Double> effectiveCeilingGetter) {
+            java.util.function.Consumer<ServerPlayer> removeToxinEffect,
+            Function<ServerPlayer, ProtectionLevel> protectionGetter
+    ) {}
 
+    private DebugCommands() {}
+
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, Platform platform) {
         dispatcher.register(Commands.literal("atmosphere")
                 .requires(src -> src.hasPermission(2))
                 .then(Commands.literal("status")
-                        .executes(ctx -> status(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, configGetter, protectionGetter, activeZoneGetter, effectiveCeilingGetter))
+                        .executes(ctx -> status(ctx.getSource(), ctx.getSource().getPlayerOrException(), platform))
                         .then(Commands.argument("player", EntityArgument.player())
-                                .executes(ctx -> status(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), dataGetter, configGetter, protectionGetter, activeZoneGetter, effectiveCeilingGetter))))
+                                .executes(ctx -> status(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), platform))))
                 .then(Commands.literal("reset")
-                        .executes(ctx -> reset(ctx.getSource(), ctx.getSource().getPlayerOrException(), dataGetter, removeEffect))
+                        .executes(ctx -> reset(ctx.getSource(), ctx.getSource().getPlayerOrException(), platform))
                         .then(Commands.argument("player", EntityArgument.player())
-                                .executes(ctx -> reset(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), dataGetter, removeEffect))))
+                                .executes(ctx -> reset(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), platform))))
                 .then(Commands.literal("setairdebt")
                         .then(Commands.argument("amount", IntegerArgumentType.integer(0, 300))
                                 .executes(ctx -> setAirDebt(ctx.getSource(), ctx.getSource().getPlayerOrException(),
-                                        IntegerArgumentType.getInteger(ctx, "amount"), dataGetter))
+                                        IntegerArgumentType.getInteger(ctx, "amount"), platform))
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .executes(ctx -> setAirDebt(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"),
-                                                IntegerArgumentType.getInteger(ctx, "amount"), dataGetter)))))
+                                                IntegerArgumentType.getInteger(ctx, "amount"), platform)))))
                 .then(Commands.literal("settoxin")
                         .then(Commands.argument("amount", IntegerArgumentType.integer(0, Constants.MAX_TOXIN))
                                 .executes(ctx -> setToxin(ctx.getSource(), ctx.getSource().getPlayerOrException(),
-                                        IntegerArgumentType.getInteger(ctx, "amount"), dataGetter, removeEffect))
+                                        IntegerArgumentType.getInteger(ctx, "amount"), platform))
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .executes(ctx -> setToxin(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"),
-                                                IntegerArgumentType.getInteger(ctx, "amount"), dataGetter, removeEffect)))))
+                                                IntegerArgumentType.getInteger(ctx, "amount"), platform)))))
                 .then(Commands.literal("setgrace")
                         .then(Commands.argument("days", IntegerArgumentType.integer(0, 30))
                                 .executes(ctx -> setGrace(ctx.getSource(), ctx.getSource().getPlayerOrException(),
-                                        IntegerArgumentType.getInteger(ctx, "days"), dataGetter))
+                                        IntegerArgumentType.getInteger(ctx, "days"), platform))
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .executes(ctx -> setGrace(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"),
-                                                IntegerArgumentType.getInteger(ctx, "days"), dataGetter)))))
+                                                IntegerArgumentType.getInteger(ctx, "days"), platform)))))
                 .then(Commands.literal("config")
-                        .executes(ctx -> showConfig(ctx.getSource(), configGetter)))
+                        .executes(ctx -> showConfig(ctx.getSource(), platform)))
         );
     }
 
-    // ------------------------------------------------------------------------------------------
-
-    private static int status(CommandSourceStack src, ServerPlayer player,
-                               Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
-                               Supplier<AtmosphereSettings> configGetter,
-                               Function<ServerPlayer, ProtectionLevel> protectionGetter,
-                               Function<ServerPlayer, ZoneDefinition> activeZoneGetter,
-                               Function<ServerPlayer, Double> effectiveCeilingGetter) {
-        PlayerAtmosphereData data = dataGetter.apply(player);
-        AtmosphereSettings cfg = configGetter.get();
+    private static int status(CommandSourceStack src, ServerPlayer player, Platform p) {
+        AtmosphereSettings cfg = p.configGetter().get();
         if (cfg == null) {
             src.sendFailure(Component.literal("[HA] Config not yet loaded."));
             return 0;
         }
+        PlayerAtmosphereData data = p.dataGetter().apply(player);
         int maxAir = player.getMaxAirSupply();
-        ZoneDefinition activeZone = activeZoneGetter.apply(player);
-        ProtectionLevel protection = protectionGetter.apply(player);
+        ServerLevel sl = (ServerLevel) player.level();
+        ZoneLookup.Located loc = ZoneLookup.findLocatedZone(sl, player.getX(), player.getEyeY(), player.getZ());
+        ZoneDefinition activeZone = loc == null ? null : loc.def();
+        ProtectionLevel protection = p.protectionGetter().apply(player);
 
         String zoneStr;
         if (activeZone == null) {
             zoneStr = "§aSAFE§r";
         } else {
-            double effectiveCeiling = effectiveCeilingGetter.apply(player);
+            long tick = sl.getGameTime();
+            double base = loc.def().evalCeiling(tick, player.getX(), player.getZ());
+            double effectiveCeiling = AtmosphereProgressionData.get(sl.getServer())
+                    .getEffectiveCeiling(tick, player.getX(), player.getZ(), loc.id(), base);
             zoneStr = String.format("§cHAZARD§r (y<=%.0f, %ds, tox%ds)",
                     effectiveCeiling, activeZone.hazardTimeSecs(), activeZone.toxinBuildupSecs());
         }
@@ -124,21 +127,18 @@ public final class DebugCommands {
         return 1;
     }
 
-    private static int reset(CommandSourceStack src, ServerPlayer player,
-                              Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
-                              Consumer<ServerPlayer> removeEffect) {
-        PlayerAtmosphereData data = dataGetter.apply(player);
+    private static int reset(CommandSourceStack src, ServerPlayer player, Platform p) {
+        PlayerAtmosphereData data = p.dataGetter().apply(player);
         data.reset(0);
         data.setGracePeriodTicks(0);
         player.setAirSupply(player.getMaxAirSupply());
-        removeEffect.accept(player);
+        p.removeToxinEffect().accept(player);
         src.sendSuccess(() -> Component.literal("[HA] Reset " + player.getName().getString()), false);
         return 1;
     }
 
-    private static int setAirDebt(CommandSourceStack src, ServerPlayer player, int amount,
-                                   Function<ServerPlayer, PlayerAtmosphereData> dataGetter) {
-        PlayerAtmosphereData data = dataGetter.apply(player);
+    private static int setAirDebt(CommandSourceStack src, ServerPlayer player, int amount, Platform p) {
+        PlayerAtmosphereData data = p.dataGetter().apply(player);
         data.setAirDebt(Math.min(amount, player.getMaxAirSupply()));
         data.setSuffocationTicks(0);
         data.setDrainAccumulator(0f);
@@ -149,24 +149,20 @@ public final class DebugCommands {
         return 1;
     }
 
-    private static int setToxin(CommandSourceStack src, ServerPlayer player, int amount,
-                                 Function<ServerPlayer, PlayerAtmosphereData> dataGetter,
-                                 Consumer<ServerPlayer> removeEffect) {
-        PlayerAtmosphereData data = dataGetter.apply(player);
+    private static int setToxin(CommandSourceStack src, ServerPlayer player, int amount, Platform p) {
+        PlayerAtmosphereData data = p.dataGetter().apply(player);
         data.setToxinLevel(Math.min(amount, Constants.MAX_TOXIN));
         data.setToxinAccumulator(0f);
         data.setToxinRecoveryAccumulator(0f);
-        // Remove the effect so the engine re-applies with the correct amplifier on the next tick
-        removeEffect.accept(player);
+        p.removeToxinEffect().accept(player);
         int set = data.getToxinLevel();
         src.sendSuccess(() -> Component.literal(
                 "[HA] toxin=" + set + " for " + player.getName().getString()), false);
         return 1;
     }
 
-    private static int setGrace(CommandSourceStack src, ServerPlayer player, int days,
-                                 Function<ServerPlayer, PlayerAtmosphereData> dataGetter) {
-        PlayerAtmosphereData data = dataGetter.apply(player);
+    private static int setGrace(CommandSourceStack src, ServerPlayer player, int days, Platform p) {
+        PlayerAtmosphereData data = p.dataGetter().apply(player);
         int ticks = days * Constants.TICKS_PER_DAY;
         data.setGracePeriodTicks(ticks);
         src.sendSuccess(() -> Component.literal(
@@ -174,8 +170,8 @@ public final class DebugCommands {
         return 1;
     }
 
-    private static int showConfig(CommandSourceStack src, Supplier<AtmosphereSettings> configGetter) {
-        AtmosphereSettings cfg = configGetter.get();
+    private static int showConfig(CommandSourceStack src, Platform p) {
+        AtmosphereSettings cfg = p.configGetter().get();
         if (cfg == null) {
             src.sendFailure(Component.literal("[HA] Config not yet loaded."));
             return 0;
@@ -198,7 +194,6 @@ public final class DebugCommands {
         return 1;
     }
 
-    /** Formats a signed per-second rate with an ETA to the relevant limit. */
     private static String formatRate(float perSec, int current, int remaining) {
         if (perSec == 0f) return "stable";
         boolean gaining = perSec > 0;

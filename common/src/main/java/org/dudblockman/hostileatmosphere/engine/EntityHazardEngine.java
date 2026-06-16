@@ -23,14 +23,6 @@ public class EntityHazardEngine {
         return !type.is(ModEntityTags.HAZARD_EXEMPT);
     }
 
-    public static boolean isDamageEnabled(EntityType<?> type, AtmosphereSettings.EntityHazardSettings cfg) {
-        return cfg.isDamageEnabled(type);
-    }
-
-    public static boolean isSuppressEnabled(EntityType<?> type, AtmosphereSettings.EntityHazardSettings cfg) {
-        return cfg.isSuppressEnabled(type);
-    }
-
     /**
      * Advances one tick of air-debt simulation for an entity.
      * Air drains over the zone's {@code hazardTimeSecs}; when fully drained the entity takes

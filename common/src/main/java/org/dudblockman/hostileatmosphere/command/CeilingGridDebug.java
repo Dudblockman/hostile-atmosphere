@@ -9,6 +9,7 @@ import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.joml.Vector3f;
 
+import java.awt.Color;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -60,8 +61,7 @@ public final class CeilingGridDebug {
         if (n == 0) return;
 
         for (int i = 0; i < n; i++) {
-            // Evenly-spaced hue across the colour wheel, full saturation & brightness.
-            int packed = hsbToRgb((float) i / n);
+            int packed = Color.HSBtoRGB((float) i / n, 1f, 1f);
             float r = ((packed >> 16) & 0xFF) / 255.0f;
             float g = ((packed >>  8) & 0xFF) / 255.0f;
             float b = ( packed        & 0xFF) / 255.0f;
@@ -82,20 +82,4 @@ public final class CeilingGridDebug {
         }
     }
 
-    /** Pure HSB→RGB for hue∈[0,1], s=1, b=1 — avoids java.awt.Color in server-side code. */
-    private static int hsbToRgb(float hue) {
-        int h = (int) (hue * 6);
-        float f = hue * 6 - h;
-        float q = 1 - f, t = f;
-        float rv, gv, bv;
-        switch (h % 6) {
-            case 0 -> { rv = 1; gv = t; bv = 0; }
-            case 1 -> { rv = q; gv = 1; bv = 0; }
-            case 2 -> { rv = 0; gv = 1; bv = t; }
-            case 3 -> { rv = 0; gv = q; bv = 1; }
-            case 4 -> { rv = t; gv = 0; bv = 1; }
-            default -> { rv = 1; gv = 0; bv = q; }
-        }
-        return ((int)(rv * 255) << 16) | ((int)(gv * 255) << 8) | (int)(bv * 255);
-    }
 }

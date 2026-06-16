@@ -32,16 +32,6 @@ public class AtmosphereProgressionData extends SavedData {
         return server.overworld().getDataStorage().computeIfAbsent(FACTORY, DATA_NAME);
     }
 
-    // ------------------------------------------------------------------------------------------
-
-    /**
-     * Global level: only evaluates modifiers with target="all".
-     * Used for the debug display and as a fallback.
-     */
-    public double getLevel(long tick) {
-        return getLevelForZone(tick, 0, 0, "all");
-    }
-
     /**
      * Runs the runtime modifier pipeline for {@code zoneId} starting from {@code baseCeiling}
      * (the datapack-defined ceiling from {@code ZoneDefinition.evalCeiling}).
@@ -66,20 +56,6 @@ public class AtmosphereProgressionData extends SavedData {
     public double getLevelForZone(long tick, double x, double z, String zoneId) {
         return getEffectiveCeiling(tick, x, z, zoneId, 0.0);
     }
-
-    /**
-     * Raw pipeline computation ignoring target — exposed for tests.
-     * Test modifiers default to target="all" so this gives the same result as filtered.
-     */
-    public static double computeLevel(Iterable<AtmosphereModifier> modifiers, long tick) {
-        double level = 0.0;
-        for (AtmosphereModifier mod : modifiers) {
-            level = mod.operation().apply(level, mod.source().get(tick));
-        }
-        return level;
-    }
-
-    // ------------------------------------------------------------------------------------------
 
     /**
      * Calls {@link ValueSource#serverTick} on every modifier source.
@@ -138,8 +114,6 @@ public class AtmosphereProgressionData extends SavedData {
     public Map<Integer, AtmosphereModifier> getModifiers() {
         return Map.copyOf(modifiers);
     }
-
-    // ------------------------------------------------------------------------------------------
 
     @SuppressWarnings("null")
     @Override

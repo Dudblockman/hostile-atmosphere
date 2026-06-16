@@ -36,15 +36,16 @@ public final class ZoneCacheManager {
 
     private ZoneCacheManager() {}
 
-    public static Map<ResourceLocation, List<ZoneDefinition>> getCachedZones()  { return zoneCache.defs(); }
-    public static Map<ResourceLocation, List<String>>         getCachedZoneIds() { return zoneCache.ids(); }
-
     public static List<ZoneDefinition> getZonesForDim(ResourceLocation dim) {
         return zoneCache.defs().getOrDefault(dim, List.of());
     }
 
     public static List<String> getIdsForDim(ResourceLocation dim) {
         return zoneCache.ids().getOrDefault(dim, List.of());
+    }
+
+    public static Iterable<List<String>> getAllZoneIdsByDim() {
+        return zoneCache.ids().values();
     }
 
     public static int getLeastSevereSecsForDim(ResourceLocation dim, int fallback) {
@@ -79,10 +80,16 @@ public final class ZoneCacheManager {
                 byDim.computeIfAbsent(e.getValue().dimension(), k -> new ArrayList<>())
                         // Use toString() to include the namespace, ensuring cross-namespace uniqueness.
                         .add(new ZoneEntry(e.getKey().location().toString(), e.getValue())));
-        // Animated ceilings may cross at runtime — see the crossing-ceiling warning loop below.
         byDim.values().forEach(list -> list.sort(Comparator.comparingDouble(p -> p.def().evalCeiling(0, 0, 0))));
 
-        byDim.forEach((dim, list) -> {
+        Map<ResourceLocation, List<ZoneDefinition>> newDefs        = new LinkedHashMap<>();
+        Map<ResourceLocation, List<String>>         newIds         = new LinkedHashMap<>();
+        Map<ResourceLocation, Integer>              newLeastSevere = new LinkedHashMap<>();
+        Map<ResourceLocation, ResourceKey<Level>>   newDimKeys     = new LinkedHashMap<>();
+        for (Map.Entry<ResourceLocation, List<ZoneEntry>> dimEntry : byDim.entrySet()) {
+            ResourceLocation dim = dimEntry.getKey();
+            List<ZoneEntry> list = dimEntry.getValue();
+
             for (int i = 0; i + 1 < list.size(); i++) {
                 ZoneDefinition a = list.get(i).def();
                 ZoneDefinition b = list.get(i + 1).def();
@@ -94,18 +101,20 @@ public final class ZoneCacheManager {
                     }
                 }
             }
-        });
 
-        Map<ResourceLocation, List<ZoneDefinition>> newDefs        = new LinkedHashMap<>();
-        Map<ResourceLocation, List<String>>         newIds         = new LinkedHashMap<>();
-        Map<ResourceLocation, Integer>              newLeastSevere = new LinkedHashMap<>();
-        Map<ResourceLocation, ResourceKey<Level>>   newDimKeys     = new LinkedHashMap<>();
-        byDim.forEach((dim, list) -> {
-            newDefs.put(dim, list.stream().map(ZoneEntry::def).toList());
-            newIds.put(dim,  list.stream().map(ZoneEntry::id).toList());
-            newLeastSevere.put(dim, list.stream().mapToInt(p -> p.def().hazardTimeSecs()).max().orElse(1));
+            List<ZoneDefinition> defs = new ArrayList<>(list.size());
+            List<String> ids = new ArrayList<>(list.size());
+            int maxHazardSecs = 1;
+            for (ZoneEntry entry : list) {
+                defs.add(entry.def());
+                ids.add(entry.id());
+                if (entry.def().hazardTimeSecs() > maxHazardSecs) maxHazardSecs = entry.def().hazardTimeSecs();
+            }
+            newDefs.put(dim, List.copyOf(defs));
+            newIds.put(dim, List.copyOf(ids));
+            newLeastSevere.put(dim, maxHazardSecs);
             newDimKeys.put(dim, ResourceKey.create(Registries.DIMENSION, dim));
-        });
+        }
         zoneCache = new ZoneCache(Map.copyOf(newDefs), Map.copyOf(newIds),
                 Map.copyOf(newLeastSevere), Map.copyOf(newDimKeys));
     }

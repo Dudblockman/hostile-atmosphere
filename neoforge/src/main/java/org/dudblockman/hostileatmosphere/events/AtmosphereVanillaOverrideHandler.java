@@ -57,7 +57,7 @@ public class AtmosphereVanillaOverrideHandler {
             PlayerAtmosphereData data = sp.getData(ModAttachments.ATMOSPHERE_DATA.get());
             AtmosphereSettings cfg = AtmosphereSettings.getSettings();
             if (cfg == null) return;
-            fatigueAmp = Math.max(-1, AtmosphereEngine.getToxinAmplifier(data.getToxinLevel(), cfg) - 1);
+            fatigueAmp = AtmosphereEngine.computeFatigueAmp(data.getToxinLevel(), cfg);
         } else {
             fatigueAmp = AtmosphereClientData.getMiningFatigueAmp(player.getUUID());
         }

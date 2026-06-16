@@ -4,6 +4,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import org.dudblockman.hostileatmosphere.Constants;
+import org.dudblockman.hostileatmosphere.engine.MiasmaDamageTypes;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereModifier;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereModifier.Operation;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
@@ -12,40 +13,35 @@ import org.dudblockman.hostileatmosphere.progression.ValueSource;
 import java.util.List;
 
 import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.assertEquals;
-import org.dudblockman.hostileatmosphere.engine.MiasmaDamageTypes;
 
 @GameTestHolder(Constants.MOD_ID)
 public class ModifierComputationTests {
 
     private static final String TEMPLATE = "empty_platform";
 
-    // ------------------------------------------------------------------------------------------
-    // Pipeline level computation
-    // ------------------------------------------------------------------------------------------
-
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void emptyModifiersIsZero(GameTestHelper helper) {
-        assertEquals(0.0, AtmosphereProgressionData.computeLevel(List.of(), 0), helper);
+        assertEquals(0.0, computeLevel(List.of(), 0), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void singleAddModifier(GameTestHelper helper) {
-        assertEquals(64.0, AtmosphereProgressionData.computeLevel(
+        assertEquals(64.0, computeLevel(
                 List.of(mod(0, Operation.ADD, 64.0)), 0), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void multipleAddModifiersSum(GameTestHelper helper) {
-        assertEquals(64.0, AtmosphereProgressionData.computeLevel(
+        assertEquals(64.0, computeLevel(
                 List.of(mod(0, Operation.ADD, 40.0), mod(1, Operation.ADD, 24.0)), 0), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void negativeAddModifier(GameTestHelper helper) {
-        assertEquals(-20.0, AtmosphereProgressionData.computeLevel(
+        assertEquals(-20.0, computeLevel(
                 List.of(mod(0, Operation.ADD, -20.0)), 0), helper);
         helper.succeed();
     }
@@ -53,7 +49,7 @@ public class ModifierComputationTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void clampMaxCaps(GameTestHelper helper) {
         // ADD 100 → 100, CLAMP_MAX 60 → min(100,60) = 60
-        assertEquals(60.0, AtmosphereProgressionData.computeLevel(
+        assertEquals(60.0, computeLevel(
                 List.of(mod(0, Operation.ADD, 100.0), mod(1, Operation.CLAMP_MAX, 60.0)), 0), helper);
         helper.succeed();
     }
@@ -61,7 +57,7 @@ public class ModifierComputationTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void clampMinFloors(GameTestHelper helper) {
         // ADD -20 → -20, CLAMP_MIN 0 → max(-20,0) = 0
-        assertEquals(0.0, AtmosphereProgressionData.computeLevel(
+        assertEquals(0.0, computeLevel(
                 List.of(mod(0, Operation.ADD, -20.0), mod(1, Operation.CLAMP_MIN, 0.0)), 0), helper);
         helper.succeed();
     }
@@ -69,7 +65,7 @@ public class ModifierComputationTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void clampMinThenMax(GameTestHelper helper) {
         // ADD 0 → 0; CLAMP_MIN 10 → 10; CLAMP_MAX 50 → min(10,50) = 10
-        assertEquals(10.0, AtmosphereProgressionData.computeLevel(
+        assertEquals(10.0, computeLevel(
                 List.of(mod(0, Operation.ADD, 0.0),
                         mod(1, Operation.CLAMP_MIN, 10.0),
                         mod(2, Operation.CLAMP_MAX, 50.0)), 0), helper);
@@ -79,7 +75,7 @@ public class ModifierComputationTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void clampOrderMatters(GameTestHelper helper) {
         // ADD 0 → 0; CLAMP_MIN 30 → 30; CLAMP_MAX 20 → min(30,20) = 20. Last wins.
-        assertEquals(20.0, AtmosphereProgressionData.computeLevel(
+        assertEquals(20.0, computeLevel(
                 List.of(mod(0, Operation.ADD, 0.0),
                         mod(1, Operation.CLAMP_MIN, 30.0),
                         mod(2, Operation.CLAMP_MAX, 20.0)), 0), helper);
@@ -89,16 +85,12 @@ public class ModifierComputationTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void addBeforeClamps(GameTestHelper helper) {
         // ADD 80 → 80; CLAMP_MAX 60 → 60; CLAMP_MIN 70 → max(60,70) = 70
-        assertEquals(70.0, AtmosphereProgressionData.computeLevel(
+        assertEquals(70.0, computeLevel(
                 List.of(mod(0, Operation.ADD, 80.0),
                         mod(1, Operation.CLAMP_MAX, 60.0),
                         mod(2, Operation.CLAMP_MIN, 70.0)), 0), helper);
         helper.succeed();
     }
-
-    // ------------------------------------------------------------------------------------------
-    // Constant ramp-in (tweenTicks > 0 scales from 0 to value)
-    // ------------------------------------------------------------------------------------------
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void constantRampAtStart(GameTestHelper helper) {
@@ -132,10 +124,6 @@ public class ModifierComputationTests {
         helper.succeed();
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Constant.settle()
-    // ------------------------------------------------------------------------------------------
-
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void constantSettlesAfterTweenComplete(GameTestHelper helper) {
         var m = rampMod(64.0, 100L, 0L);
@@ -153,10 +141,6 @@ public class ModifierComputationTests {
         assertEquals("unsettled tweenTicks", 100, (int) ((ValueSource.Constant) notYet).tweenTicks(), helper);
         helper.succeed();
     }
-
-    // ------------------------------------------------------------------------------------------
-    // SinWave value source
-    // ------------------------------------------------------------------------------------------
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void sinWaveAtZero(GameTestHelper helper) {
@@ -200,10 +184,6 @@ public class ModifierComputationTests {
         helper.succeed();
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Perlin noise value source
-    // ------------------------------------------------------------------------------------------
-
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void perlinSameSeedSameOutput(GameTestHelper helper) {
         // Two independent instances with same seed must produce identical output.
@@ -246,10 +226,6 @@ public class ModifierComputationTests {
         helper.succeed();
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Interval ticks (MiasmaDamageTypes.toIntervalTicks)
-    // ------------------------------------------------------------------------------------------
-
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void intervalTicksDefault(GameTestHelper helper) {
         assertIntervalTicks(4.0f, 80, helper);
@@ -274,10 +250,6 @@ public class ModifierComputationTests {
         helper.succeed();
     }
 
-    // ------------------------------------------------------------------------------------------
-    // Helpers
-    // ------------------------------------------------------------------------------------------
-
     private static void assertIntervalTicks(float secs, int expectedTicks, GameTestHelper helper) {
         assertEquals("toIntervalTicks(" + secs + "s)", expectedTicks, MiasmaDamageTypes.toIntervalTicks(secs), helper);
     }
@@ -289,6 +261,12 @@ public class ModifierComputationTests {
     private static AtmosphereModifier rampMod(double value, long tweenTicks, long startTick) {
         return new AtmosphereModifier(0, Operation.ADD,
                 new ValueSource.Constant(0.0, value, tweenTicks, startTick), "all");
+    }
+
+    private static double computeLevel(List<AtmosphereModifier> mods, long tick) {
+        AtmosphereProgressionData data = new AtmosphereProgressionData();
+        for (AtmosphereModifier m : mods) data.setModifier(m.key(), m.operation(), m.source(), m.target());
+        return data.getLevelForZone(tick, 0, 0, "all");
     }
 
 }

@@ -25,10 +25,10 @@ import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 import org.dudblockman.hostileatmosphere.registry.ModAttachments;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
 public class AtmosphereEventHandler {
@@ -38,7 +38,7 @@ public class AtmosphereEventHandler {
      * lastHazardKey / lastOffsetKey: MIN_VALUE = not yet sent (forces first-tick sync).
      * backtankDebtDrain: fractional backtank units owed from retroactive debt-recovery drain, pending consumption.
      */
-    private static final Map<UUID, PlayerSessionState> sessionStates = new ConcurrentHashMap<>();
+    private static final Map<UUID, PlayerSessionState> sessionStates = new HashMap<>();
 
     private static PlayerSessionState session(UUID id) {
         return sessionStates.computeIfAbsent(id, k -> new PlayerSessionState());
@@ -50,10 +50,6 @@ public class AtmosphereEventHandler {
         int lastFloorOffsetKey = Integer.MIN_VALUE;
         boolean lastDivingState;
         float backtankDebtDrain;
-    }
-
-    private static int computeFatigueAmp(int toxinLevel, AtmosphereSettings cfg) {
-        return Math.max(-1, AtmosphereEngine.getToxinAmplifier(toxinLevel, cfg) - 1);
     }
 
     @SubscribeEvent
@@ -125,7 +121,7 @@ public class AtmosphereEventHandler {
 
         if (newDebt != oldDebt)   PacketDistributor.sendToPlayer(player, new SyncAirDebtPayload(newDebt));
         if (newToxin != oldToxin) PacketDistributor.sendToPlayer(player,
-                new SyncToxinPayload(newToxin, computeFatigueAmp(newToxin, cfg)));
+                new SyncToxinPayload(newToxin, AtmosphereEngine.computeFatigueAmp(newToxin, cfg)));
 
         syncZoneSeverity(player, zoneResult, gameTick, px, pz);
     }
@@ -189,7 +185,7 @@ public class AtmosphereEventHandler {
         PlayerAtmosphereData data = player.getData(ModAttachments.ATMOSPHERE_DATA.get());
         AtmosphereSettings cfg = AtmosphereSettings.getSettings();
         int toxin = data.getToxinLevel();
-        int fatigueAmp = (cfg != null) ? computeFatigueAmp(toxin, cfg) : -1;
+        int fatigueAmp = (cfg != null) ? AtmosphereEngine.computeFatigueAmp(toxin, cfg) : -1;
         PacketDistributor.sendToPlayer(player, new SyncAirDebtPayload(data.getAirDebt()));
         PacketDistributor.sendToPlayer(player, new SyncToxinPayload(toxin, fatigueAmp));
         PacketDistributor.sendToPlayer(player, new SyncDivingActivePayload(false));

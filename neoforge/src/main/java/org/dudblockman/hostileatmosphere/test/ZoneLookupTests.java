@@ -38,8 +38,6 @@ public class ZoneLookupTests {
     /** Zone IDs parallel to {@link #ZONES} — used for per-zone offset tests. */
     private static final List<String> ZONE_IDS = List.of("lethal", "toxic", "hazy");
 
-    // ------------------------------------------------------------------------------------------
-
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void belowLethalCeiling(GameTestHelper helper) {
         var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, -20.0, 0.0, 0.0);
@@ -143,10 +141,6 @@ public class ZoneLookupTests {
         assertEquals("lethal ceiling", -16, (int) zone.evalCeiling(0, 0, 0), helper);
         helper.succeed();
     }
-
-    // ------------------------------------------------------------------------------------------
-    // Per-zone offset overload: AtmosphereEngine.findZone(zones, zoneIds, tick, x, eyeY, z, levelForZone)
-    // ------------------------------------------------------------------------------------------
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void perZoneOnlyLethalRaised(GameTestHelper helper) {

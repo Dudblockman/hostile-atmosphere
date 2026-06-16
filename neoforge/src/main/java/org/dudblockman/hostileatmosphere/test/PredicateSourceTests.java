@@ -38,28 +38,12 @@ public class PredicateSourceTests {
 
     private static final String TEMPLATE = "empty_platform";
 
-    /** Registry-path constructor: predicate looked up by ID at runtime. */
-    private static PredicateSource makeById(ResourceLocation predId, long tweenTicks, long evalInterval) {
-        return new PredicateSource(predId, ifPipeline(), List.of(), tweenTicks, evalInterval);
-    }
-
-    /** Testing-path constructor: predicate supplied as a Java function. */
-    private static PredicateSource make(Predicate<ServerLevel> pred, long tweenTicks, long evalInterval) {
-        return PredicateSource.withPredicate(pred, ifPipeline(), List.of(), tweenTicks, evalInterval);
-    }
-
     /** Testing-path constructor with explicit else pipeline. */
     private static PredicateSource makeWithElse(Predicate<ServerLevel> pred,
                                                 List<ZoneDefinition.CeilingLayer> ifSources,
                                                 List<ZoneDefinition.CeilingLayer> elseSources,
                                                 long tweenTicks, long evalInterval) {
         return PredicateSource.withPredicate(pred, ifSources, elseSources, tweenTicks, evalInterval);
-    }
-
-    private static List<ZoneDefinition.CeilingLayer> ifPipeline() {
-        return List.of(new ZoneDefinition.CeilingLayer(
-                AtmosphereModifier.Operation.ADD,
-                new ValueSource.Constant(0.0, 10.0, 0L, 0L)));
     }
 
     private static List<ZoneDefinition.CeilingLayer> pipeline(double value) {
@@ -71,7 +55,7 @@ public class PredicateSourceTests {
     // get() is deterministic: before any serverTick the multiplier state is (from=0, to=0), output=0.
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void predicateSourceStartsAtZero(GameTestHelper helper) {
-        var src = make(l -> true, 20L, 1L);
+        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
         assertEquals(0.0, src.get(0, 0, 0), helper);
         helper.succeed();
     }
@@ -81,7 +65,7 @@ public class PredicateSourceTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void predicateSourceFlipsAtFirstEval(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = make(l -> true, 20L, 1L);
+        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
         src.serverTick(level, 1); // flip: transitionTick=1, from=0, to=1
         assertEquals(0.0, src.get(1, 0, 0), helper);  // at transition tick, m=0
         assertEquals(0.5, src.get(2, 0, 0), helper);  // 1 tick in: m=1/20=0.05, output=0.5
@@ -92,7 +76,7 @@ public class PredicateSourceTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void predicateSourceReachesOneAfterFullTween(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = make(l -> true, 20L, 1L);
+        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
         for (long t = 1; t <= 21; t++) src.serverTick(level, t); // flip at 1, complete at 21
         assertEquals(10.0, src.get(21, 0, 0), helper);
         helper.succeed();
@@ -101,7 +85,7 @@ public class PredicateSourceTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void predicateSourceDoesNotExceedOne(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = make(l -> true, 20L, 1L);
+        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
         for (long t = 1; t <= 40; t++) src.serverTick(level, t);
         assertEquals(10.0, src.get(40, 0, 0), helper);
         helper.succeed();
@@ -110,7 +94,7 @@ public class PredicateSourceTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void alwaysFalseStaysAtZero(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = make(l -> false, 20L, 1L);
+        var src = makeWithElse(l -> false, pipeline(10.0), List.of(), 20L, 1L);
         for (long t = 1; t <= 30; t++) src.serverTick(level, t);
         assertEquals(0.0, src.get(30, 0, 0), helper);
         helper.succeed();
@@ -119,7 +103,7 @@ public class PredicateSourceTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void missingPredicateStaysAtZero(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = makeById(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "nonexistent"), 20L, 1L);
+        var src = new PredicateSource(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "nonexistent"), pipeline(10.0), List.of(), 20L, 1L);
         for (long t = 1; t <= 30; t++) src.serverTick(level, t);
         assertEquals(0.0, src.get(30, 0, 0), helper);
         helper.succeed();
@@ -129,7 +113,7 @@ public class PredicateSourceTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void predicateSourceIsAtMidpointHalfway(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = make(l -> true, 20L, 1L);
+        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
         for (long t = 1; t <= 10; t++) src.serverTick(level, t);
         assertEquals(5.0, src.get(11, 0, 0), helper); // get(11): t=(11-1)/20=0.5, output=5.0
         helper.succeed();
@@ -138,7 +122,7 @@ public class PredicateSourceTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void instantTweenJumpsImmediately(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = make(l -> true, 0L, 1L);
+        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 0L, 1L);
         src.serverTick(level, 1);
         assertEquals(10.0, src.get(1, 0, 0), helper);
         helper.succeed();
@@ -150,7 +134,7 @@ public class PredicateSourceTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void weatherPredicateUpdatesDynamically(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = make(ServerLevel::isRaining, 20L, 1L);
+        var src = makeWithElse(ServerLevel::isRaining, pipeline(10.0), List.of(), 20L, 1L);
 
         level.setRainLevel(0.0f);
         for (long t = 1; t <= 5; t++) src.serverTick(level, t);
@@ -175,7 +159,7 @@ public class PredicateSourceTests {
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void evaluationIntervalThrottlesPredicate(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = make(l -> true, 20L, 5L);
+        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 5L);
 
         src.serverTick(level, 1);
         assertEquals(0.0, src.get(1, 0, 0), helper); // 1 % 5 != 0, no evaluation yet
@@ -208,10 +192,6 @@ public class PredicateSourceTests {
         assertEquals(7.5, src.get(11, 0, 0), helper); // t=(11-1)/20=0.5 → 0.5*10+0.5*5=7.5
         helper.succeed();
     }
-
-    // ------------------------------------------------------------------------------------------
-    // evalCeiling integration: PredicateSource embedded in a ZoneDefinition ceiling pipeline
-    // ------------------------------------------------------------------------------------------
 
     // Before the first serverTick, multiplier=0 so the predicate source contributes elseSources (0).
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)

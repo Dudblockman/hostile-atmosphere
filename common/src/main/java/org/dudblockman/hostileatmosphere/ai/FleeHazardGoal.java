@@ -6,7 +6,6 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.levelgen.Heightmap;
 import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
-import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
 
 import java.util.EnumSet;
@@ -41,7 +40,7 @@ public class FleeHazardGoal extends Goal {
         ServerLevel sl = serverLevel();
         if (sl == null) return false;
         AtmosphereSettings.EntityHazardSettings cfg = AtmosphereSettings.getEntityHazardSettings();
-        if (cfg == null || !EntityHazardEngine.isDamageEnabled(mob.getType(), cfg)) return false;
+        if (cfg == null || !cfg.isDamageEnabled(mob.getType())) return false;
         if (ZoneLookup.findZoneAt(sl, mob.getX(), mob.getEyeY(), mob.getZ()) == null) {
             canUseCooldown = 20;
             return false;

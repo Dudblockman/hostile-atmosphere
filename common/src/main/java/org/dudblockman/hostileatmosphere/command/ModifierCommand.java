@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -74,106 +75,92 @@ public final class ModifierCommand {
     /** Builds the operation subtree. Reads "target" and "key" from ancestor arguments in context. */
     private static ArgumentBuilder<CommandSourceStack, ?> opNode(String opLiteral, Operation op) {
         return Commands.literal(opLiteral)
-                // constant <value> [tweenTicks]
                 .then(Commands.literal("constant")
                         .then(Commands.argument("value", DoubleArgumentType.doubleArg())
-                                .executes(ctx -> addModifier(ctx.getSource(),
-                                        IntegerArgumentType.getInteger(ctx, "key"),
-                                        StringArgumentType.getString(ctx, "target"), op,
-                                        new ValueSource.Constant(0.0, DoubleArgumentType.getDouble(ctx, "value"), 0, 0)))
+                                .executes(ctx -> execConstant(ctx, op, 0))
                                 .then(Commands.argument("tweenTicks", LongArgumentType.longArg(0))
-                                        .executes(ctx -> {
-                                            long now = ctx.getSource().getLevel().getGameTime();
-                                            int key = IntegerArgumentType.getInteger(ctx, "key");
-                                            AtmosphereModifier prev = AtmosphereProgressionData
-                                                    .get(ctx.getSource().getServer()).getModifiers().get(key);
-                                            double fromValue = prev != null ? prev.source().get(now) : 0.0;
-                                            return addModifier(ctx.getSource(), key,
-                                                    StringArgumentType.getString(ctx, "target"), op,
-                                                    new ValueSource.Constant(fromValue,
-                                                            DoubleArgumentType.getDouble(ctx, "value"),
-                                                            LongArgumentType.getLong(ctx, "tweenTicks"), now));
-                                        }))))
-                // sin <amplitude> <period> <phase> [tweenTicks]
+                                        .executes(ctx -> execConstant(ctx, op,
+                                                LongArgumentType.getLong(ctx, "tweenTicks"))))))
                 .then(Commands.literal("sin")
                         .then(Commands.argument("amplitude", DoubleArgumentType.doubleArg())
                                 .then(Commands.argument("period", LongArgumentType.longArg(1))
                                         .then(Commands.argument("phase", LongArgumentType.longArg())
-                                                .executes(ctx -> addModifier(ctx.getSource(),
-                                                        IntegerArgumentType.getInteger(ctx, "key"),
-                                                        StringArgumentType.getString(ctx, "target"), op,
-                                                        new ValueSource.SinWave(
-                                                                0.0, DoubleArgumentType.getDouble(ctx, "amplitude"),
-                                                                0.0, LongArgumentType.getLong(ctx, "period"),
-                                                                0.0, (double) LongArgumentType.getLong(ctx, "phase"),
-                                                                0L, 0L)))
+                                                .executes(ctx -> execSin(ctx, op, 0))
                                                 .then(Commands.argument("tweenTicks", LongArgumentType.longArg(0))
-                                                        .executes(ctx -> {
-                                                            long now = ctx.getSource().getLevel().getGameTime();
-                                                            int  key = IntegerArgumentType.getInteger(ctx, "key");
-                                                            AtmosphereModifier prev = AtmosphereProgressionData
-                                                                    .get(ctx.getSource().getServer()).getModifiers().get(key);
-                                                            double newAmp    = DoubleArgumentType.getDouble(ctx, "amplitude");
-                                                            double newPeriod = LongArgumentType.getLong(ctx, "period");
-                                                            double newPhase  = (double) LongArgumentType.getLong(ctx, "phase");
-                                                            double fromAmp, fromPeriod, fromPhase;
-                                                            if (prev != null && prev.source() instanceof ValueSource.SinWave s) {
-                                                                fromAmp    = s.amplitude();
-                                                                fromPeriod = s.periodTicks();
-                                                                fromPhase  = s.phaseTicks();
-                                                            } else {
-                                                                fromAmp = 0.0; fromPeriod = 0.0; fromPhase = 0.0;
-                                                            }
-                                                            return addModifier(ctx.getSource(), key,
-                                                                    StringArgumentType.getString(ctx, "target"), op,
-                                                                    new ValueSource.SinWave(fromAmp, newAmp,
-                                                                            fromPeriod, newPeriod,
-                                                                            fromPhase, newPhase,
-                                                                            LongArgumentType.getLong(ctx, "tweenTicks"), now));
-                                                        }))))))
-                // perlin <xzScale> <amplitude> <timeTicks> [tweenTicks]
+                                                        .executes(ctx -> execSin(ctx, op,
+                                                                LongArgumentType.getLong(ctx, "tweenTicks"))))))))
                 .then(Commands.literal("perlin")
                         .then(Commands.argument("xzScale", DoubleArgumentType.doubleArg(0.0001))
                                 .then(Commands.argument("amplitude", DoubleArgumentType.doubleArg())
                                         .then(Commands.argument("timeTicks", LongArgumentType.longArg(1))
-                                                .executes(ctx -> {
-                                                    long seed = ThreadLocalRandom.current().nextLong();
-                                                    return addModifier(ctx.getSource(),
-                                                            IntegerArgumentType.getInteger(ctx, "key"),
-                                                            StringArgumentType.getString(ctx, "target"), op,
-                                                            new ValueSource.Perlin(
-                                                                    DoubleArgumentType.getDouble(ctx, "xzScale"),
-                                                                    0.0, DoubleArgumentType.getDouble(ctx, "amplitude"),
-                                                                    LongArgumentType.getLong(ctx, "timeTicks"),
-                                                                    0L, 0L, seed));
-                                                })
+                                                .executes(ctx -> execPerlin(ctx, op, 0))
                                                 .then(Commands.argument("tweenTicks", LongArgumentType.longArg(0))
-                                                        .executes(ctx -> {
-                                                            long now  = ctx.getSource().getLevel().getGameTime();
-                                                            long seed = ThreadLocalRandom.current().nextLong();
-                                                            int  key  = IntegerArgumentType.getInteger(ctx, "key");
-                                                            AtmosphereModifier prev = AtmosphereProgressionData
-                                                                    .get(ctx.getSource().getServer()).getModifiers().get(key);
-                                                            double fromAmp = (prev != null && prev.source() instanceof ValueSource.Perlin p)
-                                                                    ? p.amplitude() : 0.0;
-                                                            return addModifier(ctx.getSource(), key,
-                                                                    StringArgumentType.getString(ctx, "target"), op,
-                                                                    new ValueSource.Perlin(
-                                                                            DoubleArgumentType.getDouble(ctx, "xzScale"),
-                                                                            fromAmp, DoubleArgumentType.getDouble(ctx, "amplitude"),
-                                                                            LongArgumentType.getLong(ctx, "timeTicks"),
-                                                                            LongArgumentType.getLong(ctx, "tweenTicks"),
-                                                                            now, seed));
-                                                        }))))));
+                                                        .executes(ctx -> execPerlin(ctx, op,
+                                                                LongArgumentType.getLong(ctx, "tweenTicks"))))))));
     }
 
-    // ------------------------------------------------------------------------------------------
+    private static int execConstant(CommandContext<CommandSourceStack> ctx, Operation op, long tweenTicks) {
+        long now = ctx.getSource().getLevel().getGameTime();
+        int key = IntegerArgumentType.getInteger(ctx, "key");
+        double toValue = DoubleArgumentType.getDouble(ctx, "value");
+        double fromValue;
+        if (tweenTicks > 0) {
+            AtmosphereModifier prev = AtmosphereProgressionData.get(ctx.getSource().getServer()).getModifiers().get(key);
+            fromValue = prev != null ? prev.source().get(now) : 0.0;
+        } else {
+            fromValue = 0.0;
+        }
+        return addModifier(ctx.getSource(), key, StringArgumentType.getString(ctx, "target"), op,
+                new ValueSource.Constant(fromValue, toValue, tweenTicks, tweenTicks > 0 ? now : 0));
+    }
+
+    private static int execSin(CommandContext<CommandSourceStack> ctx, Operation op, long tweenTicks) {
+        long now = ctx.getSource().getLevel().getGameTime();
+        int key = IntegerArgumentType.getInteger(ctx, "key");
+        double newAmp    = DoubleArgumentType.getDouble(ctx, "amplitude");
+        double newPeriod = LongArgumentType.getLong(ctx, "period");
+        double newPhase  = (double) LongArgumentType.getLong(ctx, "phase");
+        double fromAmp, fromPeriod, fromPhase;
+        if (tweenTicks > 0) {
+            AtmosphereModifier prev = AtmosphereProgressionData.get(ctx.getSource().getServer()).getModifiers().get(key);
+            if (prev != null && prev.source() instanceof ValueSource.SinWave s) {
+                fromAmp    = s.amplitude();
+                fromPeriod = s.periodTicks();
+                fromPhase  = s.phaseTicks();
+            } else {
+                fromAmp = 0.0; fromPeriod = 0.0; fromPhase = 0.0;
+            }
+        } else {
+            fromAmp = 0.0; fromPeriod = 0.0; fromPhase = 0.0;
+        }
+        return addModifier(ctx.getSource(), key, StringArgumentType.getString(ctx, "target"), op,
+                new ValueSource.SinWave(fromAmp, newAmp, fromPeriod, newPeriod, fromPhase, newPhase,
+                        tweenTicks, tweenTicks > 0 ? now : 0));
+    }
+
+    private static int execPerlin(CommandContext<CommandSourceStack> ctx, Operation op, long tweenTicks) {
+        long now  = ctx.getSource().getLevel().getGameTime();
+        long seed = ThreadLocalRandom.current().nextLong();
+        int  key  = IntegerArgumentType.getInteger(ctx, "key");
+        double fromAmp;
+        if (tweenTicks > 0) {
+            AtmosphereModifier prev = AtmosphereProgressionData.get(ctx.getSource().getServer()).getModifiers().get(key);
+            fromAmp = (prev != null && prev.source() instanceof ValueSource.Perlin p) ? p.amplitude() : 0.0;
+        } else {
+            fromAmp = 0.0;
+        }
+        return addModifier(ctx.getSource(), key, StringArgumentType.getString(ctx, "target"), op,
+                new ValueSource.Perlin(DoubleArgumentType.getDouble(ctx, "xzScale"),
+                        fromAmp, DoubleArgumentType.getDouble(ctx, "amplitude"),
+                        LongArgumentType.getLong(ctx, "timeTicks"),
+                        tweenTicks, tweenTicks > 0 ? now : 0, seed));
+    }
 
     private static int listAll(CommandSourceStack src) {
         AtmosphereProgressionData data = AtmosphereProgressionData.get(src.getServer());
         long tick = src.getLevel().getGameTime();
         Map<Integer, AtmosphereModifier> mods = data.getModifiers();
-        double level = data.getLevel(tick);
+        double level = data.getLevelForZone(tick, 0, 0, "all");
         StringBuilder sb = new StringBuilder(
                 String.format("[HA] global=%.2f  modifiers(%d):", level, mods.size()));
         mods.forEach((key, mod) -> sb.append(String.format("\n  [%d] %-5s (%s) | %s | now=%.2f",
@@ -190,7 +177,6 @@ public final class ModifierCommand {
         Map<Integer, AtmosphereModifier> mods = data.getModifiers();
         StringBuilder sb = new StringBuilder(String.format("[HA] modifiers for (%s):", target));
 
-        // Datapack-defined ceiling ops come first in the pipeline.
         ZoneDefinition zoneDef = zoneLookup != null ? zoneLookup.apply(src, target) : null;
         if (zoneDef != null) {
             for (ZoneDefinition.CeilingLayer layer : zoneDef.ceiling()) {
@@ -201,20 +187,20 @@ public final class ModifierCommand {
             }
         }
 
-        // Runtime modifiers applied on top of the datapack ceiling.
-        int[] count = {0};
-        mods.forEach((key, mod) -> {
+        int count = 0;
+        for (Map.Entry<Integer, AtmosphereModifier> entry : mods.entrySet()) {
+            AtmosphereModifier mod = entry.getValue();
             String t = mod.target();
-            if (!t.equals("all") && !t.equals(target)) return;
+            if (!t.equals("all") && !t.equals(target)) continue;
             sb.append(String.format("\n  [%d] %-6s (%s) | %s | now=%.2f",
-                    key, mod.operation().getSerializedName(), t,
+                    entry.getKey(), mod.operation().getSerializedName(), t,
                     describe(mod.source()), mod.source().get(tick)));
-            count[0]++;
-        });
+            count++;
+        }
 
-        if (zoneDef == null && count[0] == 0) sb.append("\n  (none)");
+        if (zoneDef == null && count == 0) sb.append("\n  (none)");
         src.sendSuccess(() -> Component.literal(sb.toString()), false);
-        return count[0];
+        return count;
     }
 
     private static int reset(CommandSourceStack src) {
@@ -246,8 +232,6 @@ public final class ModifierCommand {
                 String.format("[HA] [%d] (%s) %s %s", key, target, op.getSerializedName(), describe(source))), false);
         return 1;
     }
-
-    // ------------------------------------------------------------------------------------------
 
     private static String describe(ValueSource source) {
         if (source instanceof ValueSource.Constant c)

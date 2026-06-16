@@ -11,7 +11,6 @@ import net.neoforged.neoforge.event.entity.player.PlayerHeartTypeEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.client.AtmosphereClientData;
-import org.dudblockman.hostileatmosphere.client.AtmosphereHudState;
 import org.dudblockman.hostileatmosphere.client.AtmosphereParticles;
 import org.dudblockman.hostileatmosphere.compat.CreateCompat;
 import org.dudblockman.hostileatmosphere.registry.ModEffects;
@@ -65,7 +64,7 @@ public class ClientEventHandler {
             }
 
             AtmosphereParticles.spawn(localPlayer, AtmosphereClientData.getHazardIntensity(localPlayer.getUUID()));
-            AtmosphereHudState.setForceHeartWiggle(wiggle);
+            AtmosphereClientData.forceHeartWiggle = wiggle;
         }
     }
 

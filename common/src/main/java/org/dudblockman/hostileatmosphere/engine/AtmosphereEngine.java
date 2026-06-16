@@ -345,6 +345,10 @@ public class AtmosphereEngine {
         return new Rates(airDebtPerSec, toxinPerSec);
     }
 
+    public static int computeFatigueAmp(int toxinLevel, AtmosphereSettings cfg) {
+        return Math.max(-1, getToxinAmplifier(toxinLevel, cfg) - 1);
+    }
+
     public static int getToxinAmplifier(int toxinLevel, AtmosphereSettings cfg) {
         if (toxinLevel >= cfg.toxinThreshold4()) return 3;
         if (toxinLevel >= cfg.toxinThreshold3()) return 2;

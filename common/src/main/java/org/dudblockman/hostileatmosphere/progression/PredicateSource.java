@@ -149,8 +149,7 @@ public final class PredicateSource implements ValueSource {
 
     private double currentMultiplier(long tick) {
         if (tweenTicks <= 0) return toMultiplier;
-        return fromMultiplier + (toMultiplier - fromMultiplier)
-                * Mth.clamp((double) (tick - transitionTick) / tweenTicks, 0.0, 1.0);
+        return Mth.lerp(Mth.clamp((double) (tick - transitionTick) / tweenTicks, 0.0, 1.0), fromMultiplier, toMultiplier);
     }
 
     private boolean testPredicate(ServerLevel level) {
