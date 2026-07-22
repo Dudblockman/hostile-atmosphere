@@ -8,6 +8,7 @@ import org.dudblockman.hostileatmosphere.progression.AtmosphereModifier.Operatio
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
 import org.dudblockman.hostileatmosphere.progression.ValueSource;
 
+import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.TEMPLATE;
 import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.assertEquals;
 
 /**
@@ -22,8 +23,6 @@ import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.assertEq
  */
 @GameTestHolder(Constants.MOD_ID)
 public class ModifierProgressionTests {
-
-    private static final String TEMPLATE = "empty_platform";
 
     /** Returns a fresh, isolated AtmosphereProgressionData instance for test isolation. */
     private static AtmosphereProgressionData freshData() {

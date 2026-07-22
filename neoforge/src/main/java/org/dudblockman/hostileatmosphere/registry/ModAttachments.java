@@ -5,6 +5,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.data.PlayerAtmosphereData;
+import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 
 import net.neoforged.neoforge.registries.DeferredHolder;
 
@@ -19,5 +20,10 @@ public class ModAttachments {
                             .serialize(PlayerAtmosphereData.CODEC)
                             .copyOnDeath()
                             .build()
+            );
+
+    public static final DeferredHolder<AttachmentType<?>, AttachmentType<EntityHazardEngine.EntityAirState>> ENTITY_AIR_STATE =
+            ATTACHMENT_TYPES.register("entity_air_state", () ->
+                    AttachmentType.builder(() -> EntityHazardEngine.EntityAirState.ZERO).build()
             );
 }

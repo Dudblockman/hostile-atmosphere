@@ -8,8 +8,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
-import java.util.HashMap;
-import java.util.UUID;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
@@ -22,11 +20,10 @@ import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.dudblockman.hostileatmosphere.progression.ZoneLookup;
+import org.dudblockman.hostileatmosphere.registry.ModAttachments;
 
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
 public class EntityHazardEventHandler {
-
-    private static final HashMap<UUID, EntityHazardEngine.EntityAirState> airStateMap = new HashMap<>();
 
     @SubscribeEvent
     public static void onEntityTick(EntityTickEvent.Post event) {
@@ -38,21 +35,18 @@ public class EntityHazardEventHandler {
         if (atmosphereSettings == null) return;
 
         if (!EntityHazardEngine.isSubjectToHazard(living)) return;
-        if (living.isDeadOrDying()) {
-            airStateMap.remove(living.getUUID());
-            return;
-        }
+        if (living.isDeadOrDying()) return;
         if (!AtmosphereConfig.isDamageEnabled(living.getType())) return;
         if (!(living.level() instanceof ServerLevel serverLevel)) return;
 
         ZoneDefinition activeZone = ZoneLookup.findZoneAt(serverLevel, living.getX(), living.getEyeY(), living.getZ());
-        EntityHazardEngine.EntityAirState current = airStateMap.getOrDefault(living.getUUID(), EntityHazardEngine.EntityAirState.ZERO);
+        EntityHazardEngine.EntityAirState current = living.getData(ModAttachments.ENTITY_AIR_STATE);
         EntityHazardEngine.EntityAirState next = EntityHazardEngine.tickAirDebt(living, current, activeZone, atmosphereSettings);
 
         if (next == EntityHazardEngine.EntityAirState.ZERO) {
-            airStateMap.remove(living.getUUID());
+            living.removeData(ModAttachments.ENTITY_AIR_STATE);
         } else {
-            airStateMap.put(living.getUUID(), next);
+            living.setData(ModAttachments.ENTITY_AIR_STATE, next);
         }
     }
 
@@ -87,8 +81,7 @@ public class EntityHazardEventHandler {
     }
 
     public static int getAirDebt(LivingEntity entity) {
-        EntityHazardEngine.EntityAirState state = airStateMap.get(entity.getUUID());
-        return state != null ? state.airDebt() : 0;
+        return entity.getData(ModAttachments.ENTITY_AIR_STATE).airDebt();
     }
 
     private static double spawnEyeY(BlockPos pos, EntityType<?> type) {

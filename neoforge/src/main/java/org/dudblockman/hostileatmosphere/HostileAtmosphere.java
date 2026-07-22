@@ -32,7 +32,6 @@ public class HostileAtmosphere {
                 event.dataPackRegistry(ModRegistries.ZONES, ZoneDefinition.CODEC, ZoneDefinition.CODEC));
         modEventBus.addListener(GameTestRegistration::onRegisterGameTests); // test classes must be on main classpath for NeoForge game test scanning
         modContainer.registerConfig(ModConfig.Type.SERVER, AtmosphereConfigSpec.SPEC);
-        // AtmosphereConfig.cacheSettings();
         AtmosphereSettings.register(AtmosphereConfig::getSettings, AtmosphereConfig::getEntityHazardSettings);
     }
 

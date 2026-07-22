@@ -3,7 +3,6 @@ package org.dudblockman.hostileatmosphere.test;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import org.dudblockman.hostileatmosphere.Constants;
@@ -11,12 +10,13 @@ import org.dudblockman.hostileatmosphere.config.AtmosphereSettings;
 import org.dudblockman.hostileatmosphere.engine.EntityHazardEngine;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 
+import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.OVERWORLD;
+import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.TEMPLATE;
+
 /** Tests for {@link EntityHazardEngine}. */
 @GameTestHolder(Constants.MOD_ID)
 public class EntityHazardTests {
 
-    private static final String TEMPLATE = "empty_platform";
-    private static final ResourceLocation OVERWORLD = ResourceLocation.fromNamespaceAndPath("minecraft", "overworld");
     private static final AtmosphereSettings CFG = AtmosphereSettings.defaults();
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)

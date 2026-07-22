@@ -12,12 +12,12 @@ import org.dudblockman.hostileatmosphere.progression.ValueSource;
 
 import java.util.List;
 
+import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.TEMPLATE;
 import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.assertEquals;
+import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.assertTrue;
 
 @GameTestHolder(Constants.MOD_ID)
 public class ModifierComputationTests {
-
-    private static final String TEMPLATE = "empty_platform";
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void emptyModifiersIsZero(GameTestHelper helper) {
@@ -198,11 +198,7 @@ public class ModifierComputationTests {
         var src = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L);
         for (int i = 0; i < 20; i++) {
             double v = src.get(i * 13L, i * 7.3, i * 11.9);
-            if (v < -5.001 || v > 5.001) {
-                String msg = "Perlin output " + v + " outside amplitude [-5,5] at i=" + i;
-                helper.fail(msg);
-                throw new AssertionError(msg);
-            }
+            assertTrue("Perlin output " + v + " within amplitude [-5,5] at i=" + i, v >= -5.001 && v <= 5.001, helper);
         }
         helper.succeed();
     }
@@ -218,11 +214,7 @@ public class ModifierComputationTests {
                 break;
             }
         }
-        if (!anyDifferent) {
-            String msg = "Seeds 42 and 99 produced identical output at all 10 sample positions";
-            helper.fail(msg);
-            throw new AssertionError(msg);
-        }
+        assertTrue("Seeds 42 and 99 produced identical output at all 10 sample positions", anyDifferent, helper);
         helper.succeed();
     }
 

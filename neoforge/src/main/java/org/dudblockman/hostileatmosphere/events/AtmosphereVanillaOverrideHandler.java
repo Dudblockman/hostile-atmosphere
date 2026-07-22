@@ -1,5 +1,7 @@
 package org.dudblockman.hostileatmosphere.events;
 
+import java.util.function.Function;
+import java.util.function.Supplier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -29,13 +31,10 @@ public class AtmosphereVanillaOverrideHandler {
         if (!(event.getEntity() instanceof Player player)) return;
         if (player.isCreative() || player.isSpectator()) return;
 
-        int debt;
-        if (player.level().isClientSide()) {
-            debt = AtmosphereClientData.getAirDebt(player.getUUID());
-        } else {
-            if (!(player instanceof ServerPlayer sp)) return;
-            debt = sp.getData(ModAttachments.ATMOSPHERE_DATA.get()).getAirDebt();
-        }
+        Integer debt = resolveClientOrServer(player,
+                () -> AtmosphereClientData.getAirDebt(player.getUUID()),
+                sp -> sp.getData(ModAttachments.ATMOSPHERE_DATA.get()).getAirDebt());
+        if (debt == null) return;
 
         if (debt > 0) {
             int ceiling   = Math.max(0, player.getMaxAirSupply() - debt);
@@ -51,19 +50,31 @@ public class AtmosphereVanillaOverrideHandler {
         Player player = event.getEntity();
         if (player.isCreative() || player.isSpectator()) return;
 
-        int fatigueAmp;
-        if (!player.level().isClientSide()) {
-            if (!(player instanceof ServerPlayer sp)) return;
-            PlayerAtmosphereData data = sp.getData(ModAttachments.ATMOSPHERE_DATA.get());
-            AtmosphereSettings cfg = AtmosphereSettings.getSettings();
-            if (cfg == null) return;
-            fatigueAmp = AtmosphereEngine.computeFatigueAmp(data.getToxinLevel(), cfg);
-        } else {
-            fatigueAmp = AtmosphereClientData.getMiningFatigueAmp(player.getUUID());
-        }
+        Integer fatigueAmp = resolveClientOrServer(player,
+                () -> AtmosphereClientData.getMiningFatigueAmp(player.getUUID()),
+                sp -> {
+                    AtmosphereSettings cfg = AtmosphereSettings.getSettings();
+                    if (cfg == null) return null;
+                    PlayerAtmosphereData data = sp.getData(ModAttachments.ATMOSPHERE_DATA.get());
+                    return AtmosphereEngine.computeFatigueAmp(data.getToxinLevel(), cfg);
+                });
+        if (fatigueAmp == null) return;
 
         if (fatigueAmp >= 0) {
             event.setNewSpeed(event.getNewSpeed() * (float) Math.pow(0.3, fatigueAmp + 1));
         }
+    }
+
+    /**
+     * Resolves a value on the client via {@code clientValue}, or on the server via
+     * {@code serverValue} given the player's {@link ServerPlayer} cast — {@code null} if the
+     * player isn't a {@link ServerPlayer} on the logical server, or if {@code serverValue} itself
+     * yields no value (e.g. config not yet loaded).
+     */
+    private static Integer resolveClientOrServer(
+            Player player, Supplier<Integer> clientValue, Function<ServerPlayer, Integer> serverValue) {
+        if (player.level().isClientSide()) return clientValue.get();
+        if (!(player instanceof ServerPlayer sp)) return null;
+        return serverValue.apply(sp);
     }
 }

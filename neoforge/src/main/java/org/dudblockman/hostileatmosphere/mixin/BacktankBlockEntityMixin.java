@@ -44,20 +44,12 @@ public class BacktankBlockEntityMixin {
         Level level = be.getLevel();
         if (level == null) return;
 
-        // Resolve world-space position — differs from block pos on Sable sub-levels.
-        Vec3 worldPos = SableCompat.isLoaded() ? SableCompat.getWorldSpacePos(be) : null;
-        double wx, wy, wz;
-        if (worldPos != null) {
-            wx = worldPos.x; wy = worldPos.y; wz = worldPos.z;
-        } else {
-            BlockPos pos = be.getBlockPos();
-            wx = pos.getX(); wy = pos.getY(); wz = pos.getZ();
-        }
+        Vec3 worldPos = resolveWorldPos(be, 0.0, 0.0);
 
-        if (ZoneLookup.findZoneAt(level, wx, wy, wz) != null) {
+        if (ZoneLookup.findZoneAt(level, worldPos.x, worldPos.y, worldPos.z) != null) {
             boolean full = airLevel >= BacktankUtil.maxAir(capacityEnchantLevel);
             if (!full && !level.isClientSide() && level.getRandom().nextInt(50) == 0) {
-                hostileatmosphere$emitBlockedParticle((ServerLevel) level, worldPos, wx, wy, wz);
+                hostileatmosphere$emitBlockedParticle((ServerLevel) level, be);
             }
             ci.cancel();
         }
@@ -65,17 +57,23 @@ public class BacktankBlockEntityMixin {
 
     // Particle near the local +Y top of the block. On a tilted Sable sub-level the
     // local Y offset must be transformed through the pose before being emitted.
-    private void hostileatmosphere$emitBlockedParticle(ServerLevel level, Vec3 worldPos,
-            double wx, double wy, double wz) {
-        double px, py, pz;
-        if (worldPos != null) {
-            BlockEntity be = (BlockEntity) (Object) this;
-            Vec3 pp = SableCompat.getWorldSpacePos(be, 0.8);
-            if (pp == null) { px = wx + 0.5; py = wy + 0.8; pz = wz + 0.5; }
-            else { px = pp.x; py = pp.y; pz = pp.z; }
-        } else {
-            px = wx + 0.5; py = wy + 0.8; pz = wz + 0.5;
+    private void hostileatmosphere$emitBlockedParticle(ServerLevel level, BlockEntity be) {
+        Vec3 pos = resolveWorldPos(be, 0.8, 0.5);
+        level.sendParticles(ParticleTypes.CRIT, pos.x, pos.y, pos.z, 4, 0.2, 0.05, 0.2, 0.1);
+    }
+
+    /**
+     * Resolves world-space position for {@code be}, transformed through the containing
+     * Sable sub-level's pose when present. Falls back to the raw block pos (offset by
+     * {@code fallbackXZOffset} in x/z, to center on the block when the caller needs that)
+     * when Sable isn't loaded or {@code be} isn't inside a sub-level.
+     */
+    private Vec3 resolveWorldPos(BlockEntity be, double localYOffset, double fallbackXZOffset) {
+        if (SableCompat.isLoaded()) {
+            Vec3 pos = SableCompat.getWorldSpacePos(be, localYOffset);
+            if (pos != null) return pos;
         }
-        level.sendParticles(ParticleTypes.CRIT, px, py, pz, 4, 0.2, 0.05, 0.2, 0.1);
+        BlockPos pos = be.getBlockPos();
+        return new Vec3(pos.getX() + fallbackXZOffset, pos.getY() + localYOffset, pos.getZ() + fallbackXZOffset);
     }
 }

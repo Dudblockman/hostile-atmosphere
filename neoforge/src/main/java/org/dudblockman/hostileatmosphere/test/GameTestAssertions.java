@@ -1,10 +1,14 @@
 package org.dudblockman.hostileatmosphere.test;
 
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceLocation;
 
 final class GameTestAssertions {
 
     static final double DELTA = 0.001;
+
+    static final String TEMPLATE = "empty_platform";
+    static final ResourceLocation OVERWORLD = ResourceLocation.fromNamespaceAndPath("minecraft", "overworld");
 
     private GameTestAssertions() {}
 

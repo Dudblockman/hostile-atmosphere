@@ -2,7 +2,6 @@ package org.dudblockman.hostileatmosphere.test;
 
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import org.dudblockman.hostileatmosphere.Constants;
 import org.dudblockman.hostileatmosphere.engine.AtmosphereEngine;
@@ -23,10 +22,6 @@ import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.*;
  */
 @GameTestHolder(Constants.MOD_ID)
 public class ZoneLookupTests {
-
-    private static final String TEMPLATE = "empty_platform";
-
-    private static final ResourceLocation OVERWORLD = ResourceLocation.fromNamespaceAndPath("minecraft", "overworld");
 
     /** Default three-zone list used across most cases. Sorted ascending by evalCeiling. */
     private static final List<ZoneDefinition> ZONES = List.of(
