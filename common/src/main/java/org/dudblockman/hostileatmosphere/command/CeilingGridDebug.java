@@ -5,11 +5,11 @@ import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import org.dudblockman.hostileatmosphere.progression.AtmosphereProgressionData;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 import org.joml.Vector3f;
 
-import java.awt.Color;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -61,7 +61,7 @@ public final class CeilingGridDebug {
         if (n == 0) return;
 
         for (int i = 0; i < n; i++) {
-            int packed = Color.HSBtoRGB((float) i / n, 1f, 1f);
+            int packed = Mth.hsvToRgb((float) i / n, 1f, 1f);
             float r = ((packed >> 16) & 0xFF) / 255.0f;
             float g = ((packed >>  8) & 0xFF) / 255.0f;
             float b = ( packed        & 0xFF) / 255.0f;

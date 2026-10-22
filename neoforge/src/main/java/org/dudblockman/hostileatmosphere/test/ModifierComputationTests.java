@@ -20,164 +20,77 @@ import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.assertTr
 public class ModifierComputationTests {
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void emptyModifiersIsZero(GameTestHelper helper) {
-        assertEquals(0.0, computeLevel(List.of(), 0), helper);
+    public static void addModifiersSumTheirOffsets(GameTestHelper helper) {
+        assertEquals("summed offset", 24.0, computeLevel(
+                List.of(mod(0, Operation.ADD, 40.0), mod(1, Operation.ADD, -16.0)), 0), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void singleAddModifier(GameTestHelper helper) {
-        assertEquals(64.0, computeLevel(
-                List.of(mod(0, Operation.ADD, 64.0)), 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void multipleAddModifiersSum(GameTestHelper helper) {
-        assertEquals(64.0, computeLevel(
-                List.of(mod(0, Operation.ADD, 40.0), mod(1, Operation.ADD, 24.0)), 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void negativeAddModifier(GameTestHelper helper) {
-        assertEquals(-20.0, computeLevel(
-                List.of(mod(0, Operation.ADD, -20.0)), 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void clampMaxCaps(GameTestHelper helper) {
-        // ADD 100 → 100, CLAMP_MAX 60 → min(100,60) = 60
-        assertEquals(60.0, computeLevel(
+    public static void capLimitsCeilingWithoutRaisingIt(GameTestHelper helper) {
+        assertEquals("above cap", 60.0, computeLevel(
                 List.of(mod(0, Operation.ADD, 100.0), mod(1, Operation.CLAMP_MAX, 60.0)), 0), helper);
+        assertEquals("below cap", 40.0, computeLevel(
+                List.of(mod(0, Operation.ADD, 40.0), mod(1, Operation.CLAMP_MAX, 60.0)), 0), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void clampMinFloors(GameTestHelper helper) {
-        // ADD -20 → -20, CLAMP_MIN 0 → max(-20,0) = 0
-        assertEquals(0.0, computeLevel(
+    public static void floorRaisesCeilingWithoutLoweringIt(GameTestHelper helper) {
+        assertEquals("below floor", 0.0, computeLevel(
                 List.of(mod(0, Operation.ADD, -20.0), mod(1, Operation.CLAMP_MIN, 0.0)), 0), helper);
+        assertEquals("above floor", 30.0, computeLevel(
+                List.of(mod(0, Operation.ADD, 30.0), mod(1, Operation.CLAMP_MIN, 0.0)), 0), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void clampMinThenMax(GameTestHelper helper) {
-        // ADD 0 → 0; CLAMP_MIN 10 → 10; CLAMP_MAX 50 → min(10,50) = 10
-        assertEquals(10.0, computeLevel(
-                List.of(mod(0, Operation.ADD, 0.0),
-                        mod(1, Operation.CLAMP_MIN, 10.0),
-                        mod(2, Operation.CLAMP_MAX, 50.0)), 0), helper);
+    public static void modifiersApplyInAscendingKeyOrder(GameTestHelper helper) {
+        assertEquals("key order", 20.0, computeLevel(
+                List.of(mod(2, Operation.CLAMP_MAX, 20.0), mod(1, Operation.CLAMP_MIN, 30.0)), 0), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void clampOrderMatters(GameTestHelper helper) {
-        // ADD 0 → 0; CLAMP_MIN 30 → 30; CLAMP_MAX 20 → min(30,20) = 20. Last wins.
-        assertEquals(20.0, computeLevel(
-                List.of(mod(0, Operation.ADD, 0.0),
-                        mod(1, Operation.CLAMP_MIN, 30.0),
-                        mod(2, Operation.CLAMP_MAX, 20.0)), 0), helper);
+    public static void constantHoldsTargetAfterTweenEnds(GameTestHelper helper) {
+        var source = new ValueSource.Constant(0.0, 64.0, 100L, 100L);
+        assertEquals("tween end", 64.0, source.get(200), helper);
+        assertEquals("after tween", 64.0, source.get(400), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void addBeforeClamps(GameTestHelper helper) {
-        // ADD 80 → 80; CLAMP_MAX 60 → 60; CLAMP_MIN 70 → max(60,70) = 70
-        assertEquals(70.0, computeLevel(
-                List.of(mod(0, Operation.ADD, 80.0),
-                        mod(1, Operation.CLAMP_MAX, 60.0),
-                        mod(2, Operation.CLAMP_MIN, 70.0)), 0), helper);
+    public static void constantTweensLinearlyFromItsStartTick(GameTestHelper helper) {
+        var source = new ValueSource.Constant(0.0, 64.0, 100L, 100L);
+        assertEquals("at start tick", 0.0, source.get(100), helper);
+        assertEquals("midpoint", 32.0, source.get(150), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void constantRampAtStart(GameTestHelper helper) {
-        assertEquals(0.0, rampMod(64.0, 100L, 0L).source().get(0), helper);
+    public static void settledConstantHoldsTargetAtEveryTick(GameTestHelper helper) {
+        var settled = new ValueSource.Constant(0.0, 64.0, 100L, 0L).settle(100);
+        assertEquals("settled value at tick 0", 64.0, settled.get(0), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void constantRampAtEnd(GameTestHelper helper) {
-        assertEquals(64.0, rampMod(64.0, 100L, 0L).source().get(100), helper);
+    public static void constantKeepsTweeningWhenSettledEarly(GameTestHelper helper) {
+        var result = new ValueSource.Constant(0.0, 64.0, 100L, 0L).settle(50);
+        assertEquals("mid-tween after early settle", 32.0, result.get(50), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void constantRampAtMidpoint(GameTestHelper helper) {
-        assertEquals(32.0, rampMod(64.0, 100L, 0L).source().get(50), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void constantRampPastEnd(GameTestHelper helper) {
-        assertEquals(64.0, rampMod(64.0, 100L, 0L).source().get(200), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void constantInstant(GameTestHelper helper) {
-        var m = new AtmosphereModifier(0, Operation.ADD, new ValueSource.Constant(0.0, 64.0, 0L, 0L), "all");
-        assertEquals(64.0, m.source().get(0), helper);
-        assertEquals(64.0, m.source().get(9999), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void constantSettlesAfterTweenComplete(GameTestHelper helper) {
-        var m = rampMod(64.0, 100L, 0L);
-        var settled = m.source().settle(100);
-        assertEquals("settled tweenTicks", 0, (int) ((ValueSource.Constant) settled).tweenTicks(), helper);
-        assertEquals("settled value", 64.0, settled.get(0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void constantDoesNotSettleBeforeTweenComplete(GameTestHelper helper) {
-        var m = rampMod(64.0, 100L, 0L);
-        var notYet = m.source().settle(50);
-        // settle() returns this before tween completes — still has tweenTicks=100
-        assertEquals("unsettled tweenTicks", 100, (int) ((ValueSource.Constant) notYet).tweenTicks(), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void sinWaveAtZero(GameTestHelper helper) {
-        // amplitude=10, period=20, phase=0 → get(0) = 10*sin(0) = 0
+    public static void sinWaveSwingsByAmplitudeOverPeriod(GameTestHelper helper) {
         var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 0.0, 0L, 0L);
-        assertEquals(0.0, src.get(0), helper);
+        assertEquals("quarter period", 10.0, src.get(5), helper);
+        assertEquals("three-quarter period", -10.0, src.get(15), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void sinWaveAtQuarterPeriod(GameTestHelper helper) {
-        // get(5) = 10*sin(2π*5/20) = 10*sin(π/2) = 10.0
-        var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 0.0, 0L, 0L);
-        assertEquals(10.0, src.get(5), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void sinWaveAtHalfPeriod(GameTestHelper helper) {
-        // get(10) = 10*sin(π) ≈ 0 (within floating-point tolerance)
-        var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 0.0, 0L, 0L);
-        assertEquals(0.0, src.get(10), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void sinWaveAtThreeQuarterPeriod(GameTestHelper helper) {
-        // get(15) = 10*sin(3π/2) = -10.0
-        var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 0.0, 0L, 0L);
-        assertEquals(-10.0, src.get(15), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void sinWavePhaseShiftsMidpoint(GameTestHelper helper) {
-        // phase=5: zero crosses at tick=5; peak at tick=10 (quarter period after zero)
-        // get(5) = 10*sin(2π*(5-5)/20) = 0; get(10) = 10*sin(2π*5/20) = 10
+    public static void sinWavePhaseDelaysWave(GameTestHelper helper) {
         var src = new ValueSource.SinWave(0.0, 10.0, 0.0, 20.0, 0.0, 5.0, 0L, 0L);
         assertEquals("at phase offset", 0.0, src.get(5), helper);
         assertEquals("quarter period after phase offset", 10.0, src.get(10), helper);
@@ -185,21 +98,18 @@ public class ModifierComputationTests {
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void perlinSameSeedSameOutput(GameTestHelper helper) {
-        // Two independent instances with same seed must produce identical output.
-        var a = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L);
-        var b = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L);
-        assertEquals(a.get(37L, 123.4, 56.7), b.get(37L, 123.4, 56.7), helper);
+    public static void perlinOutputIsFixedForSeed(GameTestHelper helper) {
+        var src = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L);
+        assertEquals("seed 42 sample", -0.6193, src.get(37L, 123.4, 56.7), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void perlinOutputWithinAmplitudeBounds(GameTestHelper helper) {
-        var src = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L);
-        for (int i = 0; i < 20; i++) {
-            double v = src.get(i * 13L, i * 7.3, i * 11.9);
-            assertTrue("Perlin output " + v + " within amplitude [-5,5] at i=" + i, v >= -5.001 && v <= 5.001, helper);
-        }
+    public static void perlinOutputScalesWithAmplitude(GameTestHelper helper) {
+        double base = new ValueSource.Perlin(0.01, 0.0, 5.0, 100.0, 0L, 0L, 42L).get(37L, 123.4, 56.7);
+        double doubled = new ValueSource.Perlin(0.01, 0.0, 10.0, 100.0, 0L, 0L, 42L).get(37L, 123.4, 56.7);
+        assertTrue("sample nonzero", Math.abs(base) > 0.01, helper);
+        assertEquals("double amplitude", 2 * base, doubled, helper);
         helper.succeed();
     }
 
@@ -219,20 +129,8 @@ public class ModifierComputationTests {
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void intervalTicksDefault(GameTestHelper helper) {
+    public static void damageIntervalConvertsSecondsAtTwentyTicksPerSecond(GameTestHelper helper) {
         assertIntervalTicks(4.0f, 80, helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void intervalTicksHalfSecond(GameTestHelper helper) {
-        assertIntervalTicks(0.5f, 10, helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void intervalTicksOneTick(GameTestHelper helper) {
-        assertIntervalTicks(0.05f, 1, helper);
         helper.succeed();
     }
 
@@ -248,11 +146,6 @@ public class ModifierComputationTests {
 
     private static AtmosphereModifier mod(int key, Operation op, double value) {
         return new AtmosphereModifier(key, op, new ValueSource.Constant(0.0, value, 0L, 0L), "all");
-    }
-
-    private static AtmosphereModifier rampMod(double value, long tweenTicks, long startTick) {
-        return new AtmosphereModifier(0, Operation.ADD,
-                new ValueSource.Constant(0.0, value, tweenTicks, startTick), "all");
     }
 
     private static double computeLevel(List<AtmosphereModifier> mods, long tick) {

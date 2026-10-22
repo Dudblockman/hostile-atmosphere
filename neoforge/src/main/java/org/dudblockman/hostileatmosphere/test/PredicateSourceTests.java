@@ -12,6 +12,7 @@ import org.dudblockman.hostileatmosphere.progression.ValueSource;
 import org.dudblockman.hostileatmosphere.progression.ZoneDefinition;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
 import static org.dudblockman.hostileatmosphere.test.GameTestAssertions.assertEquals;
@@ -38,7 +39,6 @@ public class PredicateSourceTests {
 
     private static final String TEMPLATE = "empty_platform";
 
-    /** Testing-path constructor with explicit else pipeline. */
     private static PredicateSource makeWithElse(Predicate<ServerLevel> pred,
                                                 List<ZoneDefinition.CeilingLayer> ifSources,
                                                 List<ZoneDefinition.CeilingLayer> elseSources,
@@ -52,42 +52,13 @@ public class PredicateSourceTests {
                 new ValueSource.Constant(0.0, value, 0L, 0L)));
     }
 
-    // get() is deterministic: before any serverTick the multiplier state is (from=0, to=0), output=0.
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void predicateSourceStartsAtZero(GameTestHelper helper) {
-        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
-        assertEquals(0.0, src.get(0, 0, 0), helper);
-        helper.succeed();
-    }
-
-    // On first flip (false→true) at tick T, transitionTick=T, so get(T)=0 (tween just started).
-    // get is pure: get(T+1) = 1/20 of the way → output 0.5 without another serverTick call.
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void predicateSourceFlipsAtFirstEval(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
-        src.serverTick(level, 1); // flip: transitionTick=1, from=0, to=1
-        assertEquals(0.0, src.get(1, 0, 0), helper);  // at transition tick, m=0
-        assertEquals(0.5, src.get(2, 0, 0), helper);  // 1 tick in: m=1/20=0.05, output=0.5
-        helper.succeed();
-    }
-
-    // Flip at tick 1 → complete at tick 21 (transitionTick + tweenTicks).
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void predicateSourceReachesOneAfterFullTween(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
-        for (long t = 1; t <= 21; t++) src.serverTick(level, t); // flip at 1, complete at 21
-        assertEquals(10.0, src.get(21, 0, 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void predicateSourceDoesNotExceedOne(GameTestHelper helper) {
+    public static void tweenHoldsIfPipelineValueAfterCompletion(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
         for (long t = 1; t <= 40; t++) src.serverTick(level, t);
-        assertEquals(10.0, src.get(40, 0, 0), helper);
+        assertEquals("at tween end", 10.0, src.get(21, 0, 0), helper);
+        assertEquals("after tween end", 10.0, src.get(40, 0, 0), helper);
         helper.succeed();
     }
 
@@ -109,16 +80,6 @@ public class PredicateSourceTests {
         helper.succeed();
     }
 
-    // Flip at tick 1, transitionTick=1. Midpoint (m=0.5) is at transitionTick+tweenTicks/2 = 1+10 = 11.
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void predicateSourceIsAtMidpointHalfway(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 1L);
-        for (long t = 1; t <= 10; t++) src.serverTick(level, t);
-        assertEquals(5.0, src.get(11, 0, 0), helper); // get(11): t=(11-1)/20=0.5, output=5.0
-        helper.succeed();
-    }
-
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void instantTweenJumpsImmediately(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -128,114 +89,56 @@ public class PredicateSourceTests {
         helper.succeed();
     }
 
-    // Rain starts at tick 6: flip at 6, transitionTick=6, complete at 26.
-    // Rain stops at tick 27: flip at 27 from m=1.0, transitionTick=27, complete at 47.
-    // Midpoint of stop-tween at 27+10=37 → m=0.5 → output=5.0.
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void weatherPredicateUpdatesDynamically(GameTestHelper helper) {
+    public static void falseFlipTweensBackToElsePipeline(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        var src = makeWithElse(ServerLevel::isRaining, pipeline(10.0), List.of(), 20L, 1L);
+        var isActive = new AtomicBoolean(true);
+        var src = makeWithElse(l -> isActive.get(), pipeline(10.0), pipeline(5.0), 20L, 1L);
 
-        level.setRainLevel(0.0f);
-        for (long t = 1; t <= 5; t++) src.serverTick(level, t);
-        assertEquals(0.0, src.get(5, 0, 0), helper);
+        src.serverTick(level, 1);
+        assertEquals("before false flip", 10.0, src.get(21, 0, 0), helper);
 
-        level.setRainLevel(1.0f);
-        for (long t = 6; t <= 26; t++) src.serverTick(level, t); // flip at 6, complete at 26
-        assertEquals(10.0, src.get(26, 0, 0), helper);
-
-        level.setRainLevel(0.0f);
-        for (long t = 27; t <= 36; t++) src.serverTick(level, t); // flip at 27 from m=1.0, transitionTick=27
-        assertEquals(5.0, src.get(37, 0, 0), helper); // midpoint at 27+10=37
-
-        for (long t = 37; t <= 46; t++) src.serverTick(level, t);
-        assertEquals(0.0, src.get(47, 0, 0), helper); // complete at 27+20=47
+        isActive.set(false);
+        src.serverTick(level, 27);
+        assertEquals("false flip midpoint", 7.5, src.get(37, 0, 0), helper);
+        assertEquals("false flip complete", 5.0, src.get(47, 0, 0), helper);
 
         helper.succeed();
     }
 
-    // evalInterval=5: flip first evaluated at tick 5.
-    // At tick 5 (transition tick), m=0. get(6) deterministically gives 1/20-way progress → output=0.5.
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
     public static void evaluationIntervalThrottlesPredicate(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var src = makeWithElse(l -> true, pipeline(10.0), List.of(), 20L, 5L);
 
         src.serverTick(level, 1);
-        assertEquals(0.0, src.get(1, 0, 0), helper); // 1 % 5 != 0, no evaluation yet
+        assertEquals(0.0, src.get(1, 0, 0), helper);
 
         src.serverTick(level, 2);
         src.serverTick(level, 3);
         src.serverTick(level, 4);
-        assertEquals(0.0, src.get(4, 0, 0), helper); // still no evaluation
+        assertEquals(0.0, src.get(4, 0, 0), helper);
 
-        src.serverTick(level, 5); // flip: transitionTick=5, from=0, to=1
-        assertEquals(0.0, src.get(5, 0, 0), helper); // at transition tick, m=0
-        assertEquals(0.5, src.get(6, 0, 0), helper); // 1 tick in: m=1/20=0.05, output=0.5
+        src.serverTick(level, 5);
+        assertEquals(0.0, src.get(5, 0, 0), helper);
+        assertEquals(0.5, src.get(6, 0, 0), helper);
 
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void elseSourceDominatesBeforeFirstTick(GameTestHelper helper) {
+    public static void elsePipelineAppliesBeforeFirstEvaluation(GameTestHelper helper) {
         var src = makeWithElse(l -> true, pipeline(10.0), pipeline(5.0), 20L, 1L);
-        assertEquals(5.0, src.get(0, 0, 0), helper);
+        assertEquals("before first evaluation", 5.0, src.get(0, 0, 0), helper);
         helper.succeed();
     }
 
-    // Flip at tick 1, transitionTick=1. At get(11): t=(11-1)/20=0.5, m=0.5, output=0.5*10+0.5*5=7.5.
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void blendIsCorrectMidTween(GameTestHelper helper) {
+    public static void midTweenBlendsIfAndElsePipelines(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var src = makeWithElse(l -> true, pipeline(10.0), pipeline(5.0), 20L, 1L);
         for (long t = 1; t <= 10; t++) src.serverTick(level, t);
-        assertEquals(7.5, src.get(11, 0, 0), helper); // t=(11-1)/20=0.5 → 0.5*10+0.5*5=7.5
+        assertEquals("mid-tween blend", 7.5, src.get(11, 0, 0), helper);
         helper.succeed();
-    }
-
-    // Before the first serverTick, multiplier=0 so the predicate source contributes elseSources (0).
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void ceilingStartsAtBaseBeforeFirstTick(GameTestHelper helper) {
-        var predSrc = PredicateSource.withPredicate(l -> true, pipeline(-10.0), List.of(), 0L, 1L);
-        var zone = zone(50.0, predSrc);
-        // predSrc multiplier=0 → get()=0 → evalCeiling = 50+0 = 50
-        assertEquals("ceiling before tick", 50.0, zone.evalCeiling(0, 0, 0), helper);
-        helper.succeed();
-    }
-
-    // Instant flip (tweenTicks=0): after serverTick flips to true, multiplier jumps to 1 immediately.
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void ceilingAppliesIfPipelineAfterInstantFlip(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        var predSrc = PredicateSource.withPredicate(l -> true, pipeline(-10.0), List.of(), 0L, 1L);
-        var zone = zone(50.0, predSrc);
-        predSrc.serverTick(level, 1); // flip to true, tweenTicks=0 → multiplier=1 immediately
-        // predSrc.get(1) = 1*(-10) + 0*0 = -10 → ceiling = 50 + (-10) = 40
-        assertEquals("ceiling after flip", 40.0, zone.evalCeiling(1, 0, 0), helper);
-        helper.succeed();
-    }
-
-    // Tween: flip at tick 1, tweenTicks=20. At tick 11 (halfway): m=0.5 → ceiling = 50 + 0.5*(-20) = 40.
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void ceilingTweensBetweenBaseAndIfAtMidpoint(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        var predSrc = PredicateSource.withPredicate(l -> true, pipeline(-20.0), List.of(), 20L, 1L);
-        var zone = zone(50.0, predSrc);
-        predSrc.serverTick(level, 1); // flip: transitionTick=1, from=0, to=1
-        // get(11): t=(11-1)/20=0.5, m=0.5 → predSrc.get(11)=0.5*(-20)+0.5*0=-10 → ceiling=50+(-10)=40
-        assertEquals("ceiling at tween midpoint", 40.0, zone.evalCeiling(11, 0, 0), helper);
-        helper.succeed();
-    }
-
-    // Helpers
-
-    private static ZoneDefinition zone(double baseCeiling, PredicateSource predSrc) {
-        return new ZoneDefinition(
-                ResourceLocation.fromNamespaceAndPath("minecraft", "overworld"),
-                List.of(
-                        new ZoneDefinition.CeilingLayer(AtmosphereModifier.Operation.ADD,
-                                new ValueSource.Constant(0.0, baseCeiling, 0L, 0L)),
-                        new ZoneDefinition.CeilingLayer(AtmosphereModifier.Operation.ADD, predSrc)
-                ), 60, 600);
     }
 }

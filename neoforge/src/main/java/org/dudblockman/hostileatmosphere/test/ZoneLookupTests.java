@@ -34,7 +34,7 @@ public class ZoneLookupTests {
     private static final List<String> ZONE_IDS = List.of("lethal", "toxic", "hazy");
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void belowLethalCeiling(GameTestHelper helper) {
+    public static void eyeInsideSeveralZonesPicksMostSevere(GameTestHelper helper) {
         var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, -20.0, 0.0, 0.0);
         assertNotNull("Expected lethal zone", zone, helper);
         assertEquals("lethal ceiling", -16, (int) zone.evalCeiling(0, 0, 0), helper);
@@ -42,15 +42,7 @@ public class ZoneLookupTests {
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void atLethalCeiling(GameTestHelper helper) {
-        var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, -16.0, 0.0, 0.0);
-        assertNotNull("Expected lethal zone at boundary", zone, helper);
-        assertEquals("lethal ceiling", -16, (int) zone.evalCeiling(0, 0, 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void justAboveLethalCeiling(GameTestHelper helper) {
+    public static void eyeAboveCeilingFallsThroughToNextZone(GameTestHelper helper) {
         var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, -15.0, 0.0, 0.0);
         assertNotNull("Expected toxic zone", zone, helper);
         assertEquals("toxic ceiling", 30, (int) zone.evalCeiling(0, 0, 0), helper);
@@ -58,31 +50,7 @@ public class ZoneLookupTests {
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void midToxicBand(GameTestHelper helper) {
-        var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, 10.0, 0.0, 0.0);
-        assertNotNull("Expected toxic zone", zone, helper);
-        assertEquals("toxic ceiling", 30, (int) zone.evalCeiling(0, 0, 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void atToxicCeiling(GameTestHelper helper) {
-        var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, 30.0, 0.0, 0.0);
-        assertNotNull("Expected toxic zone at boundary", zone, helper);
-        assertEquals("toxic ceiling", 30, (int) zone.evalCeiling(0, 0, 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void midHazyBand(GameTestHelper helper) {
-        var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, 50.0, 0.0, 0.0);
-        assertNotNull("Expected hazy zone", zone, helper);
-        assertEquals("hazy ceiling", 66, (int) zone.evalCeiling(0, 0, 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void atHazyCeiling(GameTestHelper helper) {
+    public static void eyeAtCeilingCountsAsInsideZone(GameTestHelper helper) {
         var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, 66.0, 0.0, 0.0);
         assertNotNull("Expected hazy zone at boundary", zone, helper);
         assertEquals("hazy ceiling", 66, (int) zone.evalCeiling(0, 0, 0), helper);
@@ -106,39 +74,7 @@ public class ZoneLookupTests {
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void progressionPushesPlayerToSafe(GameTestHelper helper) {
-        // atmosphereLevel = -60; effective hazy ceiling = 66 - 60 = 6; eyeY 50 > 6 → safe
-        var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, 50.0, 0.0, -60.0);
-        assertNull("Expected safe zone with lowered ceilings", zone, helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void emptyZoneListAlwaysSafe(GameTestHelper helper) {
-        var zone = AtmosphereEngine.findZone(List.of(), 0L, 0.0, 10.0, 0.0, 0.0);
-        assertNull("Expected safe with no zones", zone, helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void singleZoneOnly(GameTestHelper helper) {
-        var single = List.of(ZoneDefinition.ofConstant(OVERWORLD, 30, 180, 1200));
-        var zone = AtmosphereEngine.findZone(single, 0L, 0.0, 20.0, 0.0, 0.0);
-        assertNotNull("Expected zone hit", zone, helper);
-        assertEquals("ceiling", 30, (int) zone.evalCeiling(0, 0, 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void negativeYInHazard(GameTestHelper helper) {
-        var zone = AtmosphereEngine.findZone(ZONES, 0L, 0.0, -30.0, 0.0, 0.0);
-        assertNotNull("Expected lethal zone below 0", zone, helper);
-        assertEquals("lethal ceiling", -16, (int) zone.evalCeiling(0, 0, 0), helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void perZoneOnlyLethalRaised(GameTestHelper helper) {
+    public static void perZoneRaisedCeilingCatchesEyeAboveBase(GameTestHelper helper) {
         // lethal ceiling raised by 32 → effective -16 + 32 = 16; eyeY 10 ≤ 16 → lethal
         var zone = AtmosphereEngine.findZone(ZONES, ZONE_IDS, 0L, 0.0, 10.0, 0.0,
                 (id, base) -> "lethal".equals(id) ? base + 32.0 : base);

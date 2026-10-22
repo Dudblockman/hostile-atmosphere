@@ -11,5 +11,6 @@ public class GameTestRegistration {
         event.register(ToxinAmplifierTests.class);
         event.register(PredicateSourceTests.class);
         event.register(EntityHazardTests.class);
+        event.register(ClientDataTests.class);
     }
 }

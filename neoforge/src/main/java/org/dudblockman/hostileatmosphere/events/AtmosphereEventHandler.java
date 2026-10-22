@@ -6,6 +6,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.dudblockman.hostileatmosphere.Constants;
@@ -179,6 +180,11 @@ public class AtmosphereEventHandler {
         data.reset(retainedToxin);
         sessionStates.remove(player.getUUID());
         syncAll(player);
+    }
+
+    @SubscribeEvent
+    public static void onServerStopped(ServerStoppedEvent event) {
+        sessionStates.clear();
     }
 
     private static void syncAll(ServerPlayer player) {

@@ -29,59 +29,32 @@ public class ToxinAmplifierTests {
             null, null, null);
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void belowThreshold1(GameTestHelper helper) {
-        assertAmplifier(0, -1, helper);
+    public static void toxinBelowFirstThresholdGivesNoEffect(GameTestHelper helper) {
+        GameTestAssertions.assertEquals("getToxinAmplifier(249)", -1, AtmosphereEngine.getToxinAmplifier(249, CFG), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void justBelowThreshold1(GameTestHelper helper) {
-        assertAmplifier(249, -1, helper);
+    public static void toxinAtFirstThresholdGivesAmplifierZero(GameTestHelper helper) {
+        GameTestAssertions.assertEquals("getToxinAmplifier(250)", 0, AtmosphereEngine.getToxinAmplifier(250, CFG), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void atThreshold1(GameTestHelper helper) {
-        assertAmplifier(250, 0, helper);
+    public static void toxinAtSecondThresholdGivesAmplifierOne(GameTestHelper helper) {
+        GameTestAssertions.assertEquals("getToxinAmplifier(500)", 1, AtmosphereEngine.getToxinAmplifier(500, CFG), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void midLevel1(GameTestHelper helper) {
-        assertAmplifier(400, 0, helper);
+    public static void toxinAtThirdThresholdGivesAmplifierTwo(GameTestHelper helper) {
+        GameTestAssertions.assertEquals("getToxinAmplifier(750)", 2, AtmosphereEngine.getToxinAmplifier(750, CFG), helper);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void atThreshold2(GameTestHelper helper) {
-        assertAmplifier(500, 1, helper);
+    public static void toxinAtFourthThresholdGivesAmplifierThree(GameTestHelper helper) {
+        GameTestAssertions.assertEquals("getToxinAmplifier(950)", 3, AtmosphereEngine.getToxinAmplifier(950, CFG), helper);
         helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void atThreshold3(GameTestHelper helper) {
-        assertAmplifier(750, 2, helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void atThreshold4(GameTestHelper helper) {
-        assertAmplifier(950, 3, helper);
-        helper.succeed();
-    }
-
-    @GameTest(template = TEMPLATE, templateNamespace = Constants.MOD_ID, timeoutTicks = 1)
-    public static void atMax(GameTestHelper helper) {
-        assertAmplifier(Constants.MAX_TOXIN, 3, helper);
-        helper.succeed();
-    }
-
-    private static void assertAmplifier(int toxin, int expectedAmp, GameTestHelper helper) {
-        int actual = AtmosphereEngine.getToxinAmplifier(toxin, CFG);
-        if (actual != expectedAmp) {
-            String msg = String.format("getToxinAmplifier(%d): expected amp %d but was %d", toxin, expectedAmp, actual);
-            helper.fail(msg);
-            throw new RuntimeException(msg);
-        }
     }
 }

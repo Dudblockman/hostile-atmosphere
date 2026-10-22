@@ -21,6 +21,11 @@ public final class AtmosphereClientData {
 
     private AtmosphereClientData() {}
 
+    /** Called on client logout so session-scoped flags do not leak into the next world or server. */
+    public static void resetSession() {
+        forceHeartWiggle = false;
+    }
+
     public static void setAirDebt(UUID id, int v) {
         if (v <= 0) { ClientState s = STATES.get(id); if (s != null) s.airDebt = 0; }
         else STATES.computeIfAbsent(id, k -> new ClientState()).airDebt = v;
